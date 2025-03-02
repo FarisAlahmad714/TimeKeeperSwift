@@ -1,0 +1,18 @@
+import Foundation
+
+struct Alarm: Identifiable, Codable {
+    var id: String
+    var name: String
+    var description: String
+    var times: [Date]
+    var dates: [Date]
+    var instances: [AlarmInstance]?
+    var status: Bool
+    var repeatInterval: RepeatInterval
+    var ringtone: String
+    var snooze: Bool
+    
+    var isEventAlarm: Bool {
+        return instances != nil && !instances!.isEmpty
+    }
+}
