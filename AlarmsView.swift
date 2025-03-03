@@ -61,6 +61,9 @@ struct AlarmsView: View {
                     // Alarms List
                     List {
                         ForEach(viewModel.alarms) { alarm in
+                            // Debug: Log the alarm type
+                            let _ = print("Rendering alarm: \(alarm.name), isEventAlarm: \(alarm.isEventAlarm), instances count: \(alarm.instances?.count ?? 0)")
+                            
                             if alarm.isEventAlarm {
                                 EventAlarmRow(alarm: alarm)
                                     .listRowBackground(Color.black)

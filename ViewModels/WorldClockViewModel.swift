@@ -47,6 +47,12 @@ class WorldClockViewModel: ObservableObject {
     }
     
     func addClock(timezone: String) {
+        // Prevent duplicates
+        if clocks.contains(where: { $0.timezone == timezone }) {
+            print("Timezone \(timezone) already exists, skipping addition")
+            return
+        }
+        
         let newClock = WorldClock(timezone: timezone, position: CGPoint(x: 100, y: 100))
         clocks.append(newClock)
         saveClocks()

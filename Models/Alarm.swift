@@ -19,6 +19,7 @@ struct Alarm: Identifiable, Codable {
     var snooze: Bool
     
     var isEventAlarm: Bool {
-        return instances != nil && !instances!.isEmpty
+        // An event alarm has more than one instance
+        return instances != nil && instances!.count > 1
     }
 }
