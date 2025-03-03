@@ -9,16 +9,35 @@ import SwiftUI
 
 struct ContentView: View {
     var body: some View {
-        VStack {
-            Image(systemName: "globe")
-                .imageScale(.large)
-                .foregroundStyle(.tint)
-            Text("Hello, world!")
+        TabView {
+            AlarmsView()
+                .tabItem {
+                    Label("Alarms", systemImage: "alarm")
+                }
+            
+            WorldClockView()
+                .tabItem {
+                    Label("World Clock", systemImage: "globe")
+                }
+            
+            StopwatchView()
+                .tabItem {
+                    Label("Stopwatch", systemImage: "stopwatch")
+                }
+            
+            TimerView()
+                .tabItem {
+                    Label("Timer", systemImage: "timer")
+                }
         }
-        .padding()
+        .accentColor(.red) // Similar to the "tomato" color in the original app
     }
 }
 
-#Preview {
-    ContentView()
+struct ContentView_Previews: PreviewProvider {
+    static var previews: some View {
+        ContentView()
+            .environmentObject(AlarmViewModel())
+            .environmentObject(WorldClockViewModel())
+    }
 }

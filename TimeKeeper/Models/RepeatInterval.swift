@@ -1,3 +1,11 @@
+//
+//  RepeatInterval.swift
+//  TimeKeeper
+//
+//  Created by Faris Alahmad on 3/2/25.
+//
+
+
 import Foundation
 
 enum RepeatInterval: String, Codable, CaseIterable {

@@ -1,3 +1,10 @@
+//
+//  AlarmInstance.swift
+//  TimeKeeper
+//
+//  Created by Faris Alahmad on 3/2/25.
+//
+
 import Foundation
 
 struct AlarmInstance: Identifiable, Codable {
@@ -5,4 +12,5 @@ struct AlarmInstance: Identifiable, Codable {
     var date: Date
     var time: Date
     var description: String
+    var repeatInterval: RepeatInterval // Added repeatInterval for each instance
 }
