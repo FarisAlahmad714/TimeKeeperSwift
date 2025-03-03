@@ -10,120 +10,24 @@ import SwiftUI
 import UserNotifications
 
 class TimerViewModel: ObservableObject {
-    @Published var hours = 0
-    @Published var minutes = 0
-    @Published var seconds = 0
+    @Published var hours: Int = 0
+    @Published var minutes: Int = 0
+    @Published var seconds: Int = 0
+    @Published var label: String = ""
+    @Published var isRunning: Bool = false
     @Published var remainingTime: TimeInterval = 0
-    @Published var isRunning = false
-    @Published var showAnimation = false
-    @Published var label = ""
     @Published var timerHistory: [TimerHistoryItem] = []
+    @Published var showAnimation: Bool = false
     
     private var timer: Timer?
-    private var endDate: Date?
+    var initialDuration: TimeInterval = 0
     
     init() {
         loadHistory()
     }
     
-    func startTimer() {
-        guard !isRunning, totalSeconds > 0 else { return }
-        
-        isRunning = true
-        remainingTime = TimeInterval(totalSeconds)
-        endDate = Date().addingTimeInterval(remainingTime)
-        
+    deinit {
         timer?.invalidate()
-        timer = Timer.scheduledTimer(withTimeInterval: 1.0, repeats: true) { [weak self] _ in
-            guard let self = self else { return }
-            self.updateRemainingTime()
-        }
-        
-        scheduleNotification()
-        showAnimation = true
-    }
-    
-    func stopTimer() {
-        isRunning = false
-        timer?.invalidate()
-        timer = nil
-        showAnimation = false
-        cancelNotification()
-    }
-    
-    func resetTimer() {
-        stopTimer()
-        remainingTime = 0
-        hours = 0
-        minutes = 0
-        seconds = 0
-        label = ""
-        showAnimation = false
-    }
-    
-    func completeTimer() {
-        addToHistory()
-        resetTimer()
-    }
-    
-    private var totalSeconds: Int {
-        (hours * 3600) + (minutes * 60) + seconds
-    }
-    
-    private func updateRemainingTime() {
-        guard let endDate = endDate else { return }
-        remainingTime = max(0, endDate.timeIntervalSinceNow)
-        
-        if remainingTime <= 0 {
-            completeTimer()
-        }
-        
-        let totalSeconds = Int(remainingTime)
-        hours = totalSeconds / 3600
-        minutes = (totalSeconds % 3600) / 60
-        seconds = totalSeconds % 60
-    }
-    
-    private func scheduleNotification() {
-        let content = UNMutableNotificationContent()
-        content.title = label.isEmpty ? "Timer Finished" : label
-        content.body = "Your timer has completed!"
-        content.sound = .default
-        
-        let trigger = UNTimeIntervalNotificationTrigger(timeInterval: remainingTime, repeats: false)
-        let request = UNNotificationRequest(identifier: UUID().uuidString, content: content, trigger: trigger)
-        
-        UNUserNotificationCenter.current().add(request) { error in
-            if let error = error {
-                print("Error scheduling timer notification: \(error)")
-            }
-        }
-    }
-    
-    private func cancelNotification() {
-        UNUserNotificationCenter.current().removeAllPendingNotificationRequests()
-    }
-    
-    private func addToHistory() {
-        let historyItem = TimerHistoryItem(
-            title: formattedTime(TimeInterval(totalSeconds)),
-            label: label
-        )
-        timerHistory.append(historyItem)
-        saveHistory()
-    }
-    
-    private func loadHistory() {
-        if let data = UserDefaults.standard.data(forKey: "timerHistory"),
-           let decoded = try? JSONDecoder().decode([TimerHistoryItem].self, from: data) {
-            timerHistory = decoded
-        }
-    }
-    
-    private func saveHistory() {
-        if let encoded = try? JSONEncoder().encode(timerHistory) {
-            UserDefaults.standard.set(encoded, forKey: "timerHistory")
-        }
     }
     
     func formattedTime(_ time: TimeInterval) -> String {
@@ -133,13 +37,97 @@ class TimerViewModel: ObservableObject {
         return String(format: "%02d:%02d:%02d", hours, minutes, seconds)
     }
     
-    deinit {
+    func startTimer() {
+        guard !isRunning else { return }
+        
+        initialDuration = TimeInterval(hours * 3600 + minutes * 60 + seconds)
+        remainingTime = initialDuration
+        
+        if remainingTime <= 0 { return }
+        
+        isRunning = true
+        showAnimation = true
+        
+        timer = Timer.scheduledTimer(withTimeInterval: 1.0, repeats: true) { [weak self] _ in
+            guard let self = self else { return }
+            if self.remainingTime > 0 {
+                self.remainingTime -= 1
+            } else {
+                self.stopTimer()
+            }
+        }
+        
+        scheduleTimerNotification()
+    }
+    
+    func stopTimer() {
         timer?.invalidate()
+        isRunning = false
+        showAnimation = false
+        
+        if initialDuration > 0 {
+            let historyItem = TimerHistoryItem(
+                title: formattedTime(initialDuration),
+                label: label.isEmpty ? "Timer" : label
+            )
+            timerHistory.append(historyItem)
+            saveHistory()
+        }
+    }
+    
+    func resetTimer() {
+        timer?.invalidate()
+        isRunning = false
+        remainingTime = 0
+        hours = 0
+        minutes = 0
+        seconds = 0
+        label = ""
+        showAnimation = false
+        initialDuration = 0
+        
+        UNUserNotificationCenter.current().removePendingNotificationRequests(withIdentifiers: ["timerNotification"])
+    }
+    
+    private func scheduleTimerNotification() {
+        let content = UNMutableNotificationContent()
+        content.title = label.isEmpty ? "Timer Finished" : "\(label) Finished"
+        content.body = "Your timer has completed!"
+        content.sound = .default
+        
+        let trigger = UNTimeIntervalNotificationTrigger(timeInterval: remainingTime, repeats: false)
+        let request = UNNotificationRequest(identifier: "timerNotification", content: content, trigger: trigger)
+        
+        UNUserNotificationCenter.current().add(request) { error in
+            if let error = error {
+                print("Error scheduling timer notification: \(error)")
+            }
+        }
+    }
+    
+    // Changed from private to public
+    public func saveHistory() {
+        if let encoded = try? JSONEncoder().encode(timerHistory) {
+            UserDefaults.standard.set(encoded, forKey: "timerHistory")
+        }
+    }
+    
+    private func loadHistory() {
+        if let data = UserDefaults.standard.data(forKey: "timerHistory"),
+           let decoded = try? JSONDecoder().decode([TimerHistoryItem].self, from: data) {
+            timerHistory = decoded
+        }
     }
 }
 
 struct TimerHistoryItem: Identifiable, Codable {
-    var id: UUID = UUID()
-    var title: String
-    var label: String
+    let id: UUID
+    let title: String
+    let label: String
+    
+    init(title: String, label: String) {
+        self.id = UUID()
+        self.title = title
+        self.label = label
+    }
 }
