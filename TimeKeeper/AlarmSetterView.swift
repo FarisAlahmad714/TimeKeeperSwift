@@ -3,161 +3,128 @@ import SwiftUI
 struct AlarmSetterView: View {
     @EnvironmentObject var viewModel: AlarmViewModel
     @State private var selectedTime: Date = Date()
-    @State private var isDragging = false
-    @State private var showAlarmsView = false
+    @State private var isDragging: Bool = false
+    @State private var showAlarmsView: Bool = false
+    @State private var sunOpacity: Double = 0.5
+    @State private var moonOpacity: Double = 0.5
     
+    private let calendar = Calendar.current
+    private let startOfDay = Calendar.current.startOfDay(for: Date())
     private let timeFormatter: DateFormatter = {
         let formatter = DateFormatter()
         formatter.dateFormat = "h:mm a"
         return formatter
     }()
     
-    private var minutesSinceMidnight: Double {
-        let calendar = Calendar.current
-        let components = calendar.dateComponents([.hour, .minute], from: selectedTime)
-        let hour = components.hour ?? 0
-        let minute = components.minute ?? 0
-        return Double(hour * 60 + minute)
+    private var totalMinutesInDay: Int {
+        let endOfDay = calendar.date(byAdding: .day, value: 1, to: startOfDay)!
+        return calendar.dateComponents([.minute], from: startOfDay, to: endOfDay).minute!
     }
     
-    private var backgroundGradient: LinearGradient {
-        let hour = Calendar.current.component(.hour, from: selectedTime)
-        let colors: [Color]
-        
+    private var backgroundColors: [Color] {
+        let hour = calendar.component(.hour, from: selectedTime)
         switch hour {
-        case 6..<12:
-            colors = [Color.blue.opacity(0.8), Color.yellow.opacity(0.3)]
-        case 12..<18:
-            colors = [Color.blue, Color.yellow.opacity(0.5)]
-        case 18..<21:
-            colors = [Color.orange, Color.purple.opacity(0.7)]
-        case 21..<24, 0..<6:
-            colors = [Color.black, Color.blue.opacity(0.5)]
-        default:
-            colors = [Color.pink.opacity(0.7), Color.blue.opacity(0.5)]
+        case 0..<6: return [.black, .blue.opacity(0.5)]
+        case 6..<12: return [.purple.opacity(0.7), .orange.opacity(0.5)]
+        case 12..<18: return [.blue.opacity(0.8), .cyan.opacity(0.5)]
+        case 18..<21: return [.orange, .red.opacity(0.7)]
+        default: return [.black, .blue.opacity(0.5)]
         }
-        
-        return LinearGradient(
-            gradient: Gradient(colors: colors),
-            startPoint: .top,
-            endPoint: .bottom
-        )
     }
     
     var body: some View {
         NavigationView {
             ZStack {
-                backgroundGradient
+                LinearGradient(colors: backgroundColors, startPoint: .top, endPoint: .bottom)
                     .edgesIgnoringSafeArea(.all)
-                    .animation(.easeInOut(duration: 1.0), value: Calendar.current.component(.hour, from: selectedTime))
                 
-                VStack(spacing: 40) {
+                CloudView()
+                BirdView()
+                
+                IslandView()
+                
+                GaugeView(selectedTime: selectedTime, totalMinutesInDay: totalMinutesInDay)
+                
+                VStack(spacing: 30) {
                     Text(timeFormatter.string(from: selectedTime))
-                        .font(.system(size: 60, weight: .bold))
+                        .font(.system(size: 50, weight: .bold))
                         .foregroundColor(.white)
-                        .shadow(color: .black.opacity(0.3), radius: 5, x: 0, y: 2)
+                        .shadow(radius: 5)
                     
                     GeometryReader { geometry in
                         let width = geometry.size.width
-                        let totalMinutesInDay = 24.0 * 60.0
-                        let minuteWidth = width / totalMinutesInDay
-                        
                         ZStack {
                             RoundedRectangle(cornerRadius: 10)
                                 .fill(Color.white.opacity(0.2))
                                 .frame(height: 20)
-                                .overlay(
-                                    HStack(spacing: 0) {
-                                        ForEach(0..<24) { hour in
-                                            Rectangle()
-                                                .fill(Color.gray.opacity(0.5))
-                                                .frame(width: 1, height: hour % 6 == 0 ? 30 : 15)
-                                                .offset(x: CGFloat(hour * 60) * minuteWidth)
-                                        }
-                                    }
-                                )
-                            
                             Circle()
                                 .fill(Color.white)
                                 .frame(width: 30, height: 30)
-                                .offset(x: CGFloat(minutesSinceMidnight) * minuteWidth - width / 2)
-                                .animation(.spring(), value: minutesSinceMidnight)
+                                .offset(x: sliderOffset(width: width))
+                                .gesture(
+                                    DragGesture()
+                                        .onChanged { value in
+                                            isDragging = true
+                                            let newMinutes = max(0, min(Double(totalMinutesInDay - 1), (value.location.x / width) * Double(totalMinutesInDay)))
+                                            selectedTime = calendar.date(byAdding: .minute, value: Int(newMinutes), to: startOfDay)!
+                                        }
+                                        .onEnded { _ in isDragging = false }
+                                )
                         }
-                        .gesture(
-                            DragGesture(minimumDistance: 0)
-                                .onChanged { value in
-                                    isDragging = true
-                                    let dragX = value.location.x
-                                    let newMinutes = max(0, min(totalMinutesInDay - 1, (dragX / width) * totalMinutesInDay))
-                                    updateTime(minutes: Int(newMinutes))
-                                }
-                                .onEnded { _ in
-                                    isDragging = false
-                                }
-                        )
                     }
                     .frame(height: 40)
                     .padding(.horizontal)
                     
                     HStack(spacing: 20) {
-                        Button(action: {
+                        Button("Set Alarm") {
                             viewModel.alarmTime = selectedTime
-                            viewModel.alarmDate = Calendar.current.startOfDay(for: Date())
-                            print("Setting activeModal to .choice with alarmTime: \(viewModel.alarmTime)")
                             viewModel.activeModal = .choice
-                            showAlarmsView = true // Present AlarmsView to handle the modal
-                        }) {
-                            Text("Set Alarm")
-                                .font(.headline)
-                                .foregroundColor(.white)
-                                .padding()
-                                .frame(maxWidth: .infinity)
-                                .background(
-                                    LinearGradient(
-                                        gradient: Gradient(colors: [Color.red, Color.orange]),
-                                        startPoint: .leading,
-                                        endPoint: .trailing
-                                    )
-                                )
-                                .cornerRadius(10)
-                                .shadow(color: Color.red.opacity(0.3), radius: 5, x: 0, y: 3)
-                        }
-                        
-                        Button(action: {
                             showAlarmsView = true
-                        }) {
-                            Text("View Alarms")
-                                .font(.headline)
-                                .foregroundColor(.white)
-                                .padding()
-                                .frame(maxWidth: .infinity)
-                                .background(Color.gray.opacity(0.5))
-                                .cornerRadius(10)
                         }
+                        .font(.headline)
+                        .foregroundColor(.white)
+                        .padding()
+                        .background(LinearGradient(colors: [.red, .orange], startPoint: .leading, endPoint: .trailing))
+                        .cornerRadius(10)
+                        
+                        Button("View Alarms") {
+                            showAlarmsView = true
+                        }
+                        .font(.headline)
+                        .foregroundColor(.white)
+                        .padding()
+                        .background(Color.gray.opacity(0.5))
+                        .cornerRadius(10)
                     }
-                    .padding(.horizontal)
                 }
             }
             .navigationBarHidden(true)
             .sheet(isPresented: $showAlarmsView) {
                 AlarmsView()
             }
+            .onChange(of: selectedTime) { newTime in
+                let hour = calendar.component(.hour, from: newTime)
+                switch hour {
+                case 6..<12:
+                    sunOpacity = 1.0
+                    moonOpacity = 0.0
+                case 18..<21:
+                    sunOpacity = 0.5
+                    moonOpacity = 0.5
+                case 21..<24, 0..<6:
+                    sunOpacity = 0.0
+                    moonOpacity = 1.0
+                default:
+                    sunOpacity = 0.5
+                    moonOpacity = 0.5
+                }
+            }
         }
     }
     
-    private func updateTime(minutes: Int) {
-        let calendar = Calendar.current
-        let startOfDay = calendar.startOfDay(for: Date())
-        if let newTime = calendar.date(byAdding: .minute, value: minutes, to: startOfDay) {
-            selectedTime = newTime
-        }
-    }
-}
-
-struct AlarmSetterView_Previews: PreviewProvider {
-    static var previews: some View {
-        AlarmSetterView()
-            .environmentObject(AlarmViewModel())
-            .preferredColorScheme(.dark)
+    private func sliderOffset(width: CGFloat) -> CGFloat {
+        let minuteWidth = width / Double(totalMinutesInDay)
+        let minutesSinceMidnight = calendar.dateComponents([.minute], from: startOfDay, to: selectedTime).minute!
+        return CGFloat(minutesSinceMidnight) * minuteWidth - width / 2
     }
 }
