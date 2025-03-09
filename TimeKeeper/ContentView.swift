@@ -5,12 +5,13 @@
 //  Created by Faris Alahmad on 3/2/25.
 //
 
+// ContentView.swift
 import SwiftUI
 
 struct ContentView: View {
     var body: some View {
         TabView {
-            AlarmsView()
+            AlarmSetterView() // Replace AlarmsView with AlarmSetterView
                 .tabItem {
                     Label("Alarms", systemImage: "alarm")
                 }
@@ -30,7 +31,7 @@ struct ContentView: View {
                     Label("Timer", systemImage: "timer")
                 }
         }
-        .accentColor(.red) // Similar to the "tomato" color in the original app
+        .accentColor(.red)
     }
 }
 

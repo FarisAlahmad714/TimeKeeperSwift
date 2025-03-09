@@ -1,5 +1,3 @@
-// AlarmViewModel.swift
-
 import Foundation
 import SwiftUI
 import UserNotifications
@@ -7,14 +5,7 @@ import AVFoundation
 
 class AlarmViewModel: ObservableObject {
     @Published var alarms: [Alarm] = []
-    @Published var showChoiceModal = false
-    @Published var showSingleAlarmModal = false
-    @Published var showEventAlarmModal = false
-    @Published var showEditSingleAlarmModal = false
-    @Published var showEditInstanceModal = false
-    @Published var showAddInstanceModal = false
-    @Published var showSettingsModal = false
-    @Published var showDocumentPicker: Bool = false
+    @Published var activeModal: ModalState = .none // Now ModalState is accessible
     
     @Published var selectedEvent: Alarm?
     @Published var selectedInstance: AlarmInstance?
@@ -27,6 +18,7 @@ class AlarmViewModel: ObservableObject {
     
     @Published var settings: AlarmSettings
     @Published var selectedAlarm: Alarm?
+    @Published var showDocumentPicker: Bool = false
     
     let availableRingtones: [String] = [
         "default.mp3",
@@ -46,7 +38,7 @@ class AlarmViewModel: ObservableObject {
     }
     
     func presentDocumentPicker() {
-        }
+    }
     
     func handleSelectedAudioFile(url: URL) {
         guard url.startAccessingSecurityScopedResource() else {
@@ -96,7 +88,7 @@ class AlarmViewModel: ObservableObject {
     func addAlarm() {
         let newId = UUID().uuidString
         
-        if showSingleAlarmModal {
+        if activeModal == .singleAlarm {
             let singleInstance = AlarmInstance(
                 id: UUID().uuidString,
                 date: alarmDate,
@@ -120,7 +112,7 @@ class AlarmViewModel: ObservableObject {
             )
             
             alarms.append(newAlarm)
-        } else {
+        } else if activeModal == .eventAlarm {
             let newAlarm = Alarm(
                 id: newId,
                 name: alarmName,
@@ -150,9 +142,7 @@ class AlarmViewModel: ObservableObject {
         alarmDate = Date()
         eventInstances = []
         instanceRepeatInterval = .none
-        showSingleAlarmModal = false
-        showEventAlarmModal = false
-        showChoiceModal = false
+        activeModal = .none
     }
     
     func scheduleNotifications(for alarm: Alarm) {
@@ -377,12 +367,12 @@ class AlarmViewModel: ObservableObject {
             customRingtoneURL: alarm.customRingtoneURL,
             snooze: alarm.snooze
         )
-        showSettingsModal = true
+        activeModal = .settings
     }
     
     func closeSettings() {
         selectedAlarm = nil
-        showSettingsModal = false
+        activeModal = .none
     }
     
     func updateAlarmSettings() {
@@ -439,7 +429,7 @@ class AlarmViewModel: ObservableObject {
             customRingtoneURL: alarm.customRingtoneURL,
             snooze: alarm.snooze
         )
-        showEditSingleAlarmModal = true
+        activeModal = .editSingleAlarm
     }
     
     func handleEditInstance(event: Alarm, instance: AlarmInstance) {
@@ -449,7 +439,7 @@ class AlarmViewModel: ObservableObject {
         alarmTime = instance.time
         alarmDescription = instance.description
         instanceRepeatInterval = instance.repeatInterval
-        showEditInstanceModal = true
+        activeModal = .editInstance
     }
     
     func handleAddInstance(event: Alarm) {
@@ -458,7 +448,7 @@ class AlarmViewModel: ObservableObject {
         alarmTime = Date()
         alarmDescription = ""
         instanceRepeatInterval = .none
-        showAddInstanceModal = true
+        activeModal = .addInstance
     }
     
     func deleteInstance(eventId: String, instanceId: String) {
