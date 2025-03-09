@@ -8,15 +8,17 @@
 import SwiftUI
 struct CloudView: View {
     @State private var offset: CGFloat = -100
-    
+    let speed: Double
+    let yPosition: CGFloat
+
     var body: some View {
         Image(systemName: "cloud.fill")
             .resizable()
-            .frame(width: 50, height: 30)
-            .foregroundColor(.white.opacity(0.5))
-            .offset(x: offset, y: 50)
+            .frame(width: 100, height: 50)
+            .foregroundColor(.white.opacity(0.7))
+            .offset(x: offset, y: yPosition)
             .onAppear {
-                withAnimation(Animation.linear(duration: 10).repeatForever(autoreverses: false)) {
+                withAnimation(Animation.linear(duration: speed).repeatForever(autoreverses: false)) {
                     offset = UIScreen.main.bounds.width + 100
                 }
             }
