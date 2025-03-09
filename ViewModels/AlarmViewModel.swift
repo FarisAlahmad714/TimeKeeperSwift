@@ -1,13 +1,9 @@
-//
-//  AlarmViewModel.swift
-//  TimeKeeper
-//
-//  Created by Faris Alahmad on 3/2/25.
-//
+// AlarmViewModel.swift
 
 import Foundation
 import SwiftUI
 import UserNotifications
+import AVFoundation
 
 class AlarmViewModel: ObservableObject {
     @Published var alarms: [Alarm] = []
@@ -18,6 +14,7 @@ class AlarmViewModel: ObservableObject {
     @Published var showEditInstanceModal = false
     @Published var showAddInstanceModal = false
     @Published var showSettingsModal = false
+    @Published var showDocumentPicker: Bool = false
     
     @Published var selectedEvent: Alarm?
     @Published var selectedInstance: AlarmInstance?
@@ -31,18 +28,51 @@ class AlarmViewModel: ObservableObject {
     @Published var settings: AlarmSettings
     @Published var selectedAlarm: Alarm?
     
-    // List of available ringtones (file names without path)
     let availableRingtones: [String] = [
-        "default.mp3", // Default ringtone
+        "default.mp3",
         "ringtone1.mp3",
         "ringtone2.mp3",
         "ringtone3.mp3"
     ]
     
     init() {
-        // Initialize settings with the first available ringtone
-        self.settings = AlarmSettings(ringtone: availableRingtones.first ?? "default.mp3", snooze: false)
+        self.settings = AlarmSettings(
+            ringtone: availableRingtones.first ?? "default.mp3",
+            isCustomRingtone: false,
+            customRingtoneURL: nil,
+            snooze: false
+        )
         loadAlarms()
+    }
+    
+    func presentDocumentPicker() {
+        }
+    
+    func handleSelectedAudioFile(url: URL) {
+        guard url.startAccessingSecurityScopedResource() else {
+            print("Failed to access security-scoped resource")
+            return
+        }
+        defer { url.stopAccessingSecurityScopedResource() }
+        
+        let fileManager = FileManager.default
+        let documentsURL = fileManager.urls(for: .documentDirectory, in: .userDomainMask)[0]
+        let destinationURL = documentsURL.appendingPathComponent(url.lastPathComponent)
+        
+        do {
+            if fileManager.fileExists(atPath: destinationURL.path) {
+                try fileManager.removeItem(at: destinationURL)
+            }
+            try fileManager.copyItem(at: url, to: destinationURL)
+            settings.ringtone = url.lastPathComponent
+            settings.isCustomRingtone = true
+            settings.customRingtoneURL = destinationURL
+            print("Successfully copied audio file to: \(destinationURL)")
+        } catch {
+            print("Error copying audio file: \(error)")
+        }
+        
+        showDocumentPicker = false
     }
     
     func loadAlarms() {
@@ -84,6 +114,8 @@ class AlarmViewModel: ObservableObject {
                 instances: [singleInstance],
                 status: true,
                 ringtone: settings.ringtone,
+                isCustomRingtone: settings.isCustomRingtone,
+                customRingtoneURL: settings.customRingtoneURL,
                 snooze: settings.snooze
             )
             
@@ -93,11 +125,13 @@ class AlarmViewModel: ObservableObject {
                 id: newId,
                 name: alarmName,
                 description: alarmDescription,
-                times: eventInstances.map { $0.time },
-                dates: eventInstances.map { $0.date },
+                times: eventInstances.map { instance in instance.time },
+                dates: eventInstances.map { instance in instance.date },
                 instances: eventInstances,
                 status: true,
                 ringtone: settings.ringtone,
+                isCustomRingtone: settings.isCustomRingtone,
+                customRingtoneURL: settings.customRingtoneURL,
                 snooze: settings.snooze
             )
             
@@ -106,7 +140,6 @@ class AlarmViewModel: ObservableObject {
         
         saveAlarms()
         scheduleNotifications(for: alarms.last!)
-        
         resetFields()
     }
     
@@ -139,17 +172,15 @@ class AlarmViewModel: ObservableObject {
                 content.title = alarm.name
                 content.body = instance.description
                 
-                // Set the custom sound
                 let soundName = alarm.ringtone
-                if Bundle.main.path(forResource: soundName.replacingOccurrences(of: ".mp3", with: ""), ofType: "mp3") != nil {
+                if !alarm.isCustomRingtone, Bundle.main.path(forResource: soundName.replacingOccurrences(of: ".mp3", with: ""), ofType: "mp3") != nil {
                     content.sound = UNNotificationSound(named: UNNotificationSoundName(rawValue: soundName))
                     print("Setting notification sound for instance \(instance.id) to: \(soundName)")
                 } else {
                     content.sound = .default
-                    print("Error: Could not find sound file \(soundName) in bundle, falling back to default sound")
+                    print("Using default sound for notification (custom sounds must be bundled)")
                 }
                 
-                // Combine the instance's date and time into a single Date
                 let dateComponents = calendar.dateComponents([.year, .month, .day], from: instance.date)
                 let timeComponents = calendar.dateComponents([.hour, .minute, .second], from: instance.time)
                 
@@ -161,13 +192,13 @@ class AlarmViewModel: ObservableObject {
                 combinedComponents.minute = timeComponents.minute
                 combinedComponents.second = timeComponents.second ?? 0
                 
-                // Ensure the combined date is valid
                 guard let startDate = calendar.date(from: combinedComponents) else {
                     print("Failed to create start date from components for instance \(instance.id): \(combinedComponents)")
                     continue
                 }
                 
-                // Schedule the initial notification if it's in the future
+                content.userInfo = ["alarmID": alarm.id, "instanceID": instance.id]
+                
                 if startDate > now {
                     let initialTrigger = UNCalendarNotificationTrigger(dateMatching: combinedComponents, repeats: false)
                     let initialRequest = UNNotificationRequest(
@@ -187,13 +218,10 @@ class AlarmViewModel: ObservableObject {
                     print("Initial notification for instance \(instance.id) is in the past: \(self.formatDateTime(from: combinedComponents))")
                 }
                 
-                // If the instance repeats, schedule notifications starting from the next available future time
                 if instance.repeatInterval != .none {
-                    // Schedule up to 10 notifications to avoid hitting the iOS limit
                     let maxRepeats = 10
                     var currentDate = startDate
                     
-                    // If the start date is in the past, find the next future time based on the repeat interval
                     if startDate <= now {
                         switch instance.repeatInterval {
                         case .minutely:
@@ -217,7 +245,6 @@ class AlarmViewModel: ObservableObject {
                         }
                     }
                     
-                    // Schedule repeating notifications starting from the adjusted currentDate
                     var repeatCounter = 0
                     while repeatCounter < maxRepeats && currentDate > now {
                         let repeatComponents = calendar.dateComponents([.year, .month, .day, .hour, .minute, .second], from: currentDate)
@@ -236,7 +263,6 @@ class AlarmViewModel: ObservableObject {
                             }
                         }
                         
-                        // Increment the date based on the repeat interval
                         switch instance.repeatInterval {
                         case .minutely:
                             currentDate = calendar.date(byAdding: .minute, value: 1, to: currentDate)!
@@ -271,20 +297,17 @@ class AlarmViewModel: ObservableObject {
     func cancelNotifications(for alarm: Alarm) {
         if let instances = alarm.instances {
             for instance in instances {
-                // Cancel the initial notification
                 UNUserNotificationCenter.current().removePendingNotificationRequests(withIdentifiers: [
                     "\(alarm.id)_instance_\(instance.id)_initial"
                 ])
                 
-                // Cancel all repeat notifications (match maxRepeats in scheduleNotifications)
                 for i in 1...10 {
                     UNUserNotificationCenter.current().removePendingNotificationRequests(withIdentifiers: [
                         "\(alarm.id)_instance_\(instance.id)_repeat_\(i)"
                     ])
                 }
                 
-                // Also cancel old format notifications for backward compatibility
-                for i in 1...60 { // Match the old maxRepeats
+                for i in 1...60 {
                     UNUserNotificationCenter.current().removePendingNotificationRequests(withIdentifiers: [
                         "\(alarm.id)_instance_\(instance.id)_repeat_\(i)",
                         "\(alarm.id)_instance_\(instance.id)_repeating"
@@ -314,7 +337,6 @@ class AlarmViewModel: ObservableObject {
             print("Deleting alarm: \(alarm.name) with ID: \(alarm.id)")
             cancelNotifications(for: alarm)
             
-            // Verify cancellation by checking pending notifications
             UNUserNotificationCenter.current().getPendingNotificationRequests { requests in
                 let remainingRequests = requests.filter { $0.identifier.contains(alarm.id) }
                 if !remainingRequests.isEmpty {
@@ -330,8 +352,6 @@ class AlarmViewModel: ObservableObject {
         
         alarms.remove(atOffsets: indexSet)
         saveAlarms()
-        
-        // As a fallback, clear all notifications to ensure no stragglers remain
         clearAllNotifications()
     }
     
@@ -353,6 +373,8 @@ class AlarmViewModel: ObservableObject {
         selectedAlarm = alarm
         settings = AlarmSettings(
             ringtone: alarm.ringtone,
+            isCustomRingtone: alarm.isCustomRingtone,
+            customRingtoneURL: alarm.customRingtoneURL,
             snooze: alarm.snooze
         )
         showSettingsModal = true
@@ -376,6 +398,8 @@ class AlarmViewModel: ObservableObject {
                 instances: alarms[index].instances,
                 status: alarms[index].status,
                 ringtone: settings.ringtone,
+                isCustomRingtone: settings.isCustomRingtone,
+                customRingtoneURL: settings.customRingtoneURL,
                 snooze: settings.snooze
             )
             
@@ -409,7 +433,12 @@ class AlarmViewModel: ObservableObject {
         if let instance = alarm.instances?.first {
             instanceRepeatInterval = instance.repeatInterval
         }
-        settings = AlarmSettings(ringtone: alarm.ringtone, snooze: alarm.snooze)
+        settings = AlarmSettings(
+            ringtone: alarm.ringtone,
+            isCustomRingtone: alarm.isCustomRingtone,
+            customRingtoneURL: alarm.customRingtoneURL,
+            snooze: alarm.snooze
+        )
         showEditSingleAlarmModal = true
     }
     

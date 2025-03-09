@@ -4,8 +4,10 @@
 //
 //  Created by Faris Alahmad on 3/2/25.
 //
+//
 
 import SwiftUI
+import UniformTypeIdentifiers
 
 struct AlarmsView: View {
     @EnvironmentObject var viewModel: AlarmViewModel
@@ -61,7 +63,6 @@ struct AlarmsView: View {
                     // Alarms List
                     List {
                         ForEach(viewModel.alarms) { alarm in
-                            // Debug: Log the alarm type
                             let _ = print("Rendering alarm: \(alarm.name), isEventAlarm: \(alarm.isEventAlarm), instances count: \(alarm.instances?.count ?? 0)")
                             
                             if alarm.isEventAlarm {
@@ -145,7 +146,6 @@ struct SingleAlarmRow: View {
             
             Spacer()
             
-            // Only show toggle and settings button for single alarms
             VStack {
                 Toggle("", isOn: Binding(
                     get: { alarm.status },
@@ -207,7 +207,6 @@ struct EventAlarmRow: View {
                             .font(.headline)
                             .foregroundColor(.white)
                         
-                        // "Plus" button to add instances (only for event alarms)
                         Button(action: {
                             viewModel.handleAddInstance(event: alarm)
                         }) {
@@ -269,7 +268,6 @@ struct EventAlarmRow: View {
                             
                             Spacer()
                             
-                            // Delete icon for instances (only for event alarms)
                             Button(action: {
                                 viewModel.deleteInstance(eventId: alarm.id, instanceId: instance.id)
                             }) {
@@ -421,13 +419,11 @@ struct SingleAlarmView: View {
                 Color.black.edgesIgnoringSafeArea(.all)
                 ScrollView {
                     VStack(spacing: 20) {
-                        // Header
                         Text(isEditing ? "Edit Single Alarm" : "Create Single Alarm")
                             .font(.system(size: 28, weight: .bold))
                             .foregroundColor(.white)
                             .padding(.top, 20)
                         
-                        // Alarm Details Card
                         VStack(spacing: 15) {
                             TextField("Alarm Name", text: $viewModel.alarmName)
                                 .foregroundColor(.white)
@@ -449,7 +445,6 @@ struct SingleAlarmView: View {
                                         .stroke(Color.gray.opacity(0.5), lineWidth: 1)
                                 )
                             
-                            // Date and Time Pickers Side by Side
                             HStack(spacing: 10) {
                                 DatePicker("Date", selection: $viewModel.alarmDate, displayedComponents: .date)
                                     .labelsHidden()
@@ -484,7 +479,6 @@ struct SingleAlarmView: View {
                         .cornerRadius(15)
                         .padding(.horizontal)
                         
-                        // Action Buttons
                         HStack(spacing: 20) {
                             Button(action: {
                                 UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
@@ -544,13 +538,11 @@ struct EventAlarmView: View {
                 Color.black.edgesIgnoringSafeArea(.all)
                 ScrollView {
                     VStack(spacing: 20) {
-                        // Header
                         Text("Create Event Alarm")
                             .font(.system(size: 28, weight: .bold))
                             .foregroundColor(.white)
                             .padding(.top, 20)
                         
-                        // Alarm Details Card
                         VStack(spacing: 15) {
                             TextField("Alarm Name", text: $viewModel.alarmName)
                                 .foregroundColor(.white)
@@ -577,7 +569,6 @@ struct EventAlarmView: View {
                         .cornerRadius(15)
                         .padding(.horizontal)
                         
-                        // Instance Creation Card
                         VStack(spacing: 15) {
                             HStack(spacing: 10) {
                                 DatePicker("Date", selection: $viewModel.alarmDate, displayedComponents: .date)
@@ -645,7 +636,6 @@ struct EventAlarmView: View {
                         .cornerRadius(15)
                         .padding(.horizontal)
                         
-                        // Instances List
                         if !viewModel.eventInstances.isEmpty {
                             VStack(spacing: 10) {
                                 Text("Instances")
@@ -674,7 +664,6 @@ struct EventAlarmView: View {
                             .padding(.horizontal)
                         }
                         
-                        // Action Buttons
                         HStack(spacing: 20) {
                             Button(action: {
                                 UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
@@ -752,13 +741,11 @@ struct EventInstanceView: View {
                 Color.black.edgesIgnoringSafeArea(.all)
                 ScrollView {
                     VStack(spacing: 20) {
-                        // Header
                         Text(isEditing ? "Edit Instance" : "Add Instance")
                             .font(.system(size: 28, weight: .bold))
                             .foregroundColor(.white)
                             .padding(.top, 20)
                         
-                        // Instance Details Card
                         VStack(spacing: 15) {
                             HStack(spacing: 10) {
                                 DatePicker("Date", selection: $viewModel.alarmDate, displayedComponents: .date)
@@ -804,7 +791,6 @@ struct EventInstanceView: View {
                         .cornerRadius(15)
                         .padding(.horizontal)
                         
-                        // Action Buttons
                         HStack(spacing: 20) {
                             Button(action: {
                                 UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
@@ -880,17 +866,19 @@ struct AlarmSettingsView: View {
                 Color.black.edgesIgnoringSafeArea(.all)
                 ScrollView {
                     VStack(spacing: 20) {
-                        // Header
                         Text("Alarm Settings")
                             .font(.system(size: 28, weight: .bold))
                             .foregroundColor(.white)
                             .padding(.top, 20)
                         
-                        // Settings Card
                         VStack(spacing: 15) {
                             Picker("Ringtone", selection: $viewModel.settings.ringtone) {
                                 ForEach(viewModel.availableRingtones, id: \.self) { ringtone in
                                     Text(ringtone.replacingOccurrences(of: ".mp3", with: "")).tag(ringtone)
+                                }
+                                if viewModel.settings.isCustomRingtone {
+                                    let customName = viewModel.settings.ringtone.replacingOccurrences(of: ".mp3", with: "")
+                                    Text("Custom: \(customName)").tag(viewModel.settings.ringtone)
                                 }
                             }
                             .pickerStyle(.menu)
@@ -898,6 +886,24 @@ struct AlarmSettingsView: View {
                             .padding()
                             .background(Color.gray.opacity(0.2))
                             .cornerRadius(10)
+                            .onChange(of: viewModel.settings.ringtone) { _, newValue in
+                                if viewModel.availableRingtones.contains(newValue) {
+                                    viewModel.settings.isCustomRingtone = false
+                                    viewModel.settings.customRingtoneURL = nil
+                                }
+                            }
+                            
+                            Button(action: {
+                                viewModel.presentDocumentPicker()
+                            }) {
+                                Text(viewModel.settings.isCustomRingtone ? "Replace Custom Ringtone" : "Upload Custom Ringtone")
+                                    .font(.headline)
+                                    .foregroundColor(.white)
+                                    .padding()
+                                    .frame(maxWidth: .infinity)
+                                    .background(Color.blue.opacity(0.8))
+                                    .cornerRadius(10)
+                            }
                             
                             Toggle("Snooze", isOn: $viewModel.settings.snooze)
                                 .feedbackDisabled()
@@ -911,7 +917,6 @@ struct AlarmSettingsView: View {
                         .cornerRadius(15)
                         .padding(.horizontal)
                         
-                        // Action Buttons
                         HStack(spacing: 20) {
                             Button(action: {
                                 UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
@@ -954,6 +959,42 @@ struct AlarmSettingsView: View {
                 }
             }
             .navigationBarHidden(true)
+            .sheet(isPresented: $viewModel.showDocumentPicker) {
+                DocumentPicker(viewModel: viewModel)
+            }
+        }
+    }
+}
+
+struct DocumentPicker: UIViewControllerRepresentable {
+    @ObservedObject var viewModel: AlarmViewModel
+    
+    func makeUIViewController(context: Context) -> UIDocumentPickerViewController {
+        let picker = UIDocumentPickerViewController(forOpeningContentTypes: [UTType.audio])
+        picker.delegate = context.coordinator
+        return picker
+    }
+    
+    func updateUIViewController(_ uiViewController: UIDocumentPickerViewController, context: Context) {}
+    
+    func makeCoordinator() -> Coordinator {
+        Coordinator(self)
+    }
+    
+    class Coordinator: NSObject, UIDocumentPickerDelegate {
+        var parent: DocumentPicker
+        
+        init(_ parent: DocumentPicker) {
+            self.parent = parent
+        }
+        
+        func documentPicker(_ controller: UIDocumentPickerViewController, didPickDocumentsAt urls: [URL]) {
+            guard let url = urls.first else { return }
+            parent.viewModel.handleSelectedAudioFile(url: url)
+        }
+        
+        func documentPickerWasCancelled(_ controller: UIDocumentPickerViewController) {
+            parent.viewModel.showDocumentPicker = false
         }
     }
 }
