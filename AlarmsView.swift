@@ -4,10 +4,7 @@
 //
 //  Created by Faris Alahmad on 3/2/25.
 //
-//
-
 import SwiftUI
-import UniformTypeIdentifiers
 
 struct AlarmsView: View {
     @EnvironmentObject var viewModel: AlarmViewModel
@@ -17,17 +14,15 @@ struct AlarmsView: View {
             ZStack {
                 Color.black.edgesIgnoringSafeArea(.all)
                 VStack(spacing: 0) {
-                    // Header
                     Text("Alarms")
                         .font(.system(size: 34, weight: .bold))
                         .foregroundColor(.white)
                         .padding(.top, 20)
                         .padding(.bottom, 10)
                     
-                    // Add Alarm Button and Clear Notifications Button
                     HStack(spacing: 10) {
                         Button(action: {
-                            viewModel.showChoiceModal = true
+                            viewModel.activeModal = .choice
                         }) {
                             Text("+ Add Alarm")
                                 .font(.headline)
@@ -35,11 +30,7 @@ struct AlarmsView: View {
                                 .padding()
                                 .frame(maxWidth: .infinity)
                                 .background(
-                                    LinearGradient(
-                                        gradient: Gradient(colors: [Color.red, Color.orange]),
-                                        startPoint: .leading,
-                                        endPoint: .trailing
-                                    )
+                                    LinearGradient(gradient: Gradient(colors: [Color.red, Color.orange]), startPoint: .leading, endPoint: .trailing)
                                 )
                                 .cornerRadius(10)
                                 .shadow(color: Color.red.opacity(0.3), radius: 5, x: 0, y: 3)
@@ -60,11 +51,8 @@ struct AlarmsView: View {
                     .padding(.horizontal)
                     .padding(.bottom, 10)
                     
-                    // Alarms List
                     List {
                         ForEach(viewModel.alarms) { alarm in
-                            let _ = print("Rendering alarm: \(alarm.name), isEventAlarm: \(alarm.isEventAlarm), instances count: \(alarm.instances?.count ?? 0)")
-                            
                             if alarm.isEventAlarm {
                                 EventAlarmRow(alarm: alarm)
                                     .listRowBackground(Color.black)
@@ -83,26 +71,31 @@ struct AlarmsView: View {
                 }
             }
             .navigationBarHidden(true)
-            .sheet(isPresented: $viewModel.showChoiceModal) {
-                AlarmChoiceView()
-            }
-            .sheet(isPresented: $viewModel.showSingleAlarmModal) {
-                SingleAlarmView()
-            }
-            .sheet(isPresented: $viewModel.showEventAlarmModal) {
-                EventAlarmView()
-            }
-            .sheet(isPresented: $viewModel.showSettingsModal) {
-                AlarmSettingsView()
-            }
-            .sheet(isPresented: $viewModel.showEditSingleAlarmModal) {
-                SingleAlarmView(isEditing: true)
-            }
-            .sheet(isPresented: $viewModel.showAddInstanceModal) {
-                EventInstanceView(isAdding: true)
-            }
-            .sheet(isPresented: $viewModel.showEditInstanceModal) {
-                EventInstanceView(isEditing: true)
+            .sheet(isPresented: Binding(
+                get: { viewModel.activeModal != .none },
+                set: { if !$0 { viewModel.activeModal = .none } }
+            )) {
+                Group {
+                    switch viewModel.activeModal {
+                    case .choice:
+                        AlarmChoiceView()
+                    case .singleAlarm:
+                        SingleAlarmView()
+                    case .eventAlarm:
+                        EventAlarmView()
+                    case .settings:
+                        AlarmSettingsView()
+                    case .editSingleAlarm:
+                        SingleAlarmView(isEditing: true)
+                    case .addInstance:
+                        EventInstanceView(isAdding: true)
+                    case .editInstance:
+                        EventInstanceView(isEditing: true)
+                    case .none:
+                        EmptyView()
+                    }
+                }
+                .id(viewModel.activeModal)
             }
         }
     }
@@ -153,7 +146,6 @@ struct SingleAlarmRow: View {
                 ))
                 .labelsHidden()
                 .toggleStyle(SwitchToggleStyle(tint: .green))
-                .feedbackDisabled()
                 
                 Button(action: {
                     viewModel.handleOpenSettings(alarm: alarm)
@@ -167,10 +159,7 @@ struct SingleAlarmRow: View {
         .padding()
         .background(Color.gray.opacity(0.2))
         .cornerRadius(10)
-        .overlay(
-            RoundedRectangle(cornerRadius: 10)
-                .stroke(Color.gray.opacity(0.5), lineWidth: 1)
-        )
+        .overlay(RoundedRectangle(cornerRadius: 10).stroke(Color.gray.opacity(0.5), lineWidth: 1))
         .padding(.horizontal)
     }
     
@@ -230,7 +219,6 @@ struct EventAlarmRow: View {
                     ))
                     .labelsHidden()
                     .toggleStyle(SwitchToggleStyle(tint: .green))
-                    .feedbackDisabled()
                     
                     Button(action: {
                         viewModel.handleOpenSettings(alarm: alarm)
@@ -283,10 +271,7 @@ struct EventAlarmRow: View {
         .padding()
         .background(Color.gray.opacity(0.2))
         .cornerRadius(10)
-        .overlay(
-            RoundedRectangle(cornerRadius: 10)
-                .stroke(Color.gray.opacity(0.5), lineWidth: 1)
-        )
+        .overlay(RoundedRectangle(cornerRadius: 10).stroke(Color.gray.opacity(0.5), lineWidth: 1))
         .padding(.horizontal)
     }
     
@@ -338,8 +323,10 @@ struct AlarmChoiceView: View {
                     .padding(.top, 20)
                 
                 Button(action: {
-                    viewModel.showSingleAlarmModal = true
-                    viewModel.showChoiceModal = false
+                    print("Selected time from AlarmSetterView: \(viewModel.alarmTime)")
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                        viewModel.activeModal = .singleAlarm
+                    }
                 }) {
                     VStack {
                         Image(systemName: "alarm")
@@ -354,16 +341,15 @@ struct AlarmChoiceView: View {
                     .frame(maxWidth: .infinity)
                     .background(Color.gray.opacity(0.2))
                     .cornerRadius(10)
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 10)
-                            .stroke(Color.gray.opacity(0.5), lineWidth: 1)
-                    )
+                    .overlay(RoundedRectangle(cornerRadius: 10).stroke(Color.gray.opacity(0.5), lineWidth: 1))
                 }
                 .padding(.horizontal)
                 
                 Button(action: {
-                    viewModel.showEventAlarmModal = true
-                    viewModel.showChoiceModal = false
+                    print("Selected time from AlarmSetterView: \(viewModel.alarmTime)")
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                        viewModel.activeModal = .eventAlarm
+                    }
                 }) {
                     VStack {
                         Image(systemName: "calendar")
@@ -378,16 +364,12 @@ struct AlarmChoiceView: View {
                     .frame(maxWidth: .infinity)
                     .background(Color.gray.opacity(0.2))
                     .cornerRadius(10)
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 10)
-                            .stroke(Color.gray.opacity(0.5), lineWidth: 1)
-                    )
+                    .overlay(RoundedRectangle(cornerRadius: 10).stroke(Color.gray.opacity(0.5), lineWidth: 1))
                 }
                 .padding(.horizontal)
                 
                 Button(action: {
-                    UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
-                    viewModel.showChoiceModal = false
+                    viewModel.activeModal = .none
                 }) {
                     Text("Close")
                         .font(.headline)
@@ -400,6 +382,9 @@ struct AlarmChoiceView: View {
                 .padding(.horizontal)
                 .padding(.bottom, 20)
             }
+        }
+        .onAppear {
+            print("AlarmChoiceView appeared with alarmTime: \(viewModel.alarmTime)")
         }
     }
 }
@@ -430,20 +415,14 @@ struct SingleAlarmView: View {
                                 .padding()
                                 .background(Color.gray.opacity(0.2))
                                 .cornerRadius(10)
-                                .overlay(
-                                    RoundedRectangle(cornerRadius: 10)
-                                        .stroke(Color.gray.opacity(0.5), lineWidth: 1)
-                                )
+                                .overlay(RoundedRectangle(cornerRadius: 10).stroke(Color.gray.opacity(0.5), lineWidth: 1))
                             
                             TextField("Description", text: $viewModel.alarmDescription)
                                 .foregroundColor(.white)
                                 .padding()
                                 .background(Color.gray.opacity(0.2))
                                 .cornerRadius(10)
-                                .overlay(
-                                    RoundedRectangle(cornerRadius: 10)
-                                        .stroke(Color.gray.opacity(0.5), lineWidth: 1)
-                                )
+                                .overlay(RoundedRectangle(cornerRadius: 10).stroke(Color.gray.opacity(0.5), lineWidth: 1))
                             
                             HStack(spacing: 10) {
                                 DatePicker("Date", selection: $viewModel.alarmDate, displayedComponents: .date)
@@ -481,10 +460,8 @@ struct SingleAlarmView: View {
                         
                         HStack(spacing: 20) {
                             Button(action: {
-                                UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
-                                viewModel.showSingleAlarmModal = false
-                                viewModel.showEditSingleAlarmModal = false
-                                viewModel.resetFields()
+                                viewModel.activeModal = .none
+                                if !isEditing { viewModel.resetFields() }
                                 dismiss()
                             }) {
                                 Text("Cancel")
@@ -497,8 +474,9 @@ struct SingleAlarmView: View {
                             }
                             
                             Button(action: {
-                                UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
                                 viewModel.addAlarm()
+                                viewModel.activeModal = .none
+                                dismiss()
                             }) {
                                 Text(isEditing ? "Update Alarm" : "Add Alarm")
                                     .font(.headline)
@@ -506,11 +484,7 @@ struct SingleAlarmView: View {
                                     .padding()
                                     .frame(maxWidth: .infinity)
                                     .background(
-                                        LinearGradient(
-                                            gradient: Gradient(colors: [Color.red, Color.orange]),
-                                            startPoint: .leading,
-                                            endPoint: .trailing
-                                        )
+                                        LinearGradient(gradient: Gradient(colors: [Color.red, Color.orange]), startPoint: .leading, endPoint: .trailing)
                                     )
                                     .cornerRadius(10)
                                     .shadow(color: Color.red.opacity(0.3), radius: 5, x: 0, y: 3)
@@ -524,6 +498,11 @@ struct SingleAlarmView: View {
                 }
             }
             .navigationBarHidden(true)
+            .onAppear {
+                if !isEditing {
+                    print("SingleAlarmView appeared with alarmTime: \(viewModel.alarmTime)")
+                }
+            }
         }
     }
 }
@@ -549,20 +528,14 @@ struct EventAlarmView: View {
                                 .padding()
                                 .background(Color.gray.opacity(0.2))
                                 .cornerRadius(10)
-                                .overlay(
-                                    RoundedRectangle(cornerRadius: 10)
-                                        .stroke(Color.gray.opacity(0.5), lineWidth: 1)
-                                )
+                                .overlay(RoundedRectangle(cornerRadius: 10).stroke(Color.gray.opacity(0.5), lineWidth: 1))
                             
                             TextField("Alarm Description", text: $viewModel.alarmDescription)
                                 .foregroundColor(.white)
                                 .padding()
                                 .background(Color.gray.opacity(0.2))
                                 .cornerRadius(10)
-                                .overlay(
-                                    RoundedRectangle(cornerRadius: 10)
-                                        .stroke(Color.gray.opacity(0.5), lineWidth: 1)
-                                )
+                                .overlay(RoundedRectangle(cornerRadius: 10).stroke(Color.gray.opacity(0.5), lineWidth: 1))
                         }
                         .padding()
                         .background(Color.gray.opacity(0.1))
@@ -593,10 +566,7 @@ struct EventAlarmView: View {
                                 .padding()
                                 .background(Color.gray.opacity(0.2))
                                 .cornerRadius(10)
-                                .overlay(
-                                    RoundedRectangle(cornerRadius: 10)
-                                        .stroke(Color.gray.opacity(0.5), lineWidth: 1)
-                                )
+                                .overlay(RoundedRectangle(cornerRadius: 10).stroke(Color.gray.opacity(0.5), lineWidth: 1))
                             
                             Picker("Repeat", selection: $viewModel.instanceRepeatInterval) {
                                 ForEach(RepeatInterval.allCases, id: \.self) { interval in
@@ -610,7 +580,6 @@ struct EventAlarmView: View {
                             .cornerRadius(10)
                             
                             Button(action: {
-                                UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
                                 viewModel.addEventInstance()
                             }) {
                                 Text("Add Instance")
@@ -619,11 +588,7 @@ struct EventAlarmView: View {
                                     .padding()
                                     .frame(maxWidth: .infinity)
                                     .background(
-                                        LinearGradient(
-                                            gradient: Gradient(colors: [Color.blue, Color.cyan]),
-                                            startPoint: .leading,
-                                            endPoint: .trailing
-                                        )
+                                        LinearGradient(gradient: Gradient(colors: [Color.blue, Color.cyan]), startPoint: .leading, endPoint: .trailing)
                                     )
                                     .cornerRadius(10)
                                     .shadow(color: Color.blue.opacity(0.3), radius: 5, x: 0, y: 3)
@@ -666,8 +631,8 @@ struct EventAlarmView: View {
                         
                         HStack(spacing: 20) {
                             Button(action: {
-                                UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
-                                viewModel.showEventAlarmModal = false
+                                viewModel.activeModal = .none
+                                viewModel.resetFields()
                                 dismiss()
                             }) {
                                 Text("Cancel")
@@ -680,8 +645,9 @@ struct EventAlarmView: View {
                             }
                             
                             Button(action: {
-                                UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
                                 viewModel.addAlarm()
+                                viewModel.activeModal = .none
+                                dismiss()
                             }) {
                                 Text("Add Event Alarm")
                                     .font(.headline)
@@ -689,11 +655,7 @@ struct EventAlarmView: View {
                                     .padding()
                                     .frame(maxWidth: .infinity)
                                     .background(
-                                        LinearGradient(
-                                            gradient: Gradient(colors: [Color.red, Color.orange]),
-                                            startPoint: .leading,
-                                            endPoint: .trailing
-                                        )
+                                        LinearGradient(gradient: Gradient(colors: [Color.red, Color.orange]), startPoint: .leading, endPoint: .trailing)
                                     )
                                     .cornerRadius(10)
                                     .shadow(color: Color.red.opacity(0.3), radius: 5, x: 0, y: 3)
@@ -707,6 +669,9 @@ struct EventAlarmView: View {
                 }
             }
             .navigationBarHidden(true)
+            .onAppear {
+                print("EventAlarmView appeared with alarmTime: \(viewModel.alarmTime)")
+            }
         }
     }
     
@@ -770,10 +735,7 @@ struct EventInstanceView: View {
                                 .padding()
                                 .background(Color.gray.opacity(0.2))
                                 .cornerRadius(10)
-                                .overlay(
-                                    RoundedRectangle(cornerRadius: 10)
-                                        .stroke(Color.gray.opacity(0.5), lineWidth: 1)
-                                )
+                                .overlay(RoundedRectangle(cornerRadius: 10).stroke(Color.gray.opacity(0.5), lineWidth: 1))
                             
                             Picker("Repeat", selection: $viewModel.instanceRepeatInterval) {
                                 ForEach(RepeatInterval.allCases, id: \.self) { interval in
@@ -793,9 +755,7 @@ struct EventInstanceView: View {
                         
                         HStack(spacing: 20) {
                             Button(action: {
-                                UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
-                                viewModel.showAddInstanceModal = false
-                                viewModel.showEditInstanceModal = false
+                                viewModel.activeModal = isEditing ? .editInstance : .addInstance
                                 dismiss()
                             }) {
                                 Text("Cancel")
@@ -808,10 +768,9 @@ struct EventInstanceView: View {
                             }
                             
                             Button(action: {
-                                UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
                                 if isAdding {
                                     viewModel.addEventInstance()
-                                    viewModel.showAddInstanceModal = false
+                                    viewModel.activeModal = .none
                                 } else if isEditing, let event = viewModel.selectedEvent, let instance = viewModel.selectedInstance {
                                     if let eventIndex = viewModel.alarms.firstIndex(where: { $0.id == event.id }),
                                        let instanceIndex = event.instances?.firstIndex(where: { $0.id == instance.id }) {
@@ -824,7 +783,7 @@ struct EventInstanceView: View {
                                         )
                                         viewModel.saveAlarms()
                                     }
-                                    viewModel.showEditInstanceModal = false
+                                    viewModel.activeModal = .none
                                 }
                                 dismiss()
                             }) {
@@ -834,11 +793,7 @@ struct EventInstanceView: View {
                                     .padding()
                                     .frame(maxWidth: .infinity)
                                     .background(
-                                        LinearGradient(
-                                            gradient: Gradient(colors: [Color.blue, Color.cyan]),
-                                            startPoint: .leading,
-                                            endPoint: .trailing
-                                        )
+                                        LinearGradient(gradient: Gradient(colors: [Color.blue, Color.cyan]), startPoint: .leading, endPoint: .trailing)
                                     )
                                     .cornerRadius(10)
                                     .shadow(color: Color.blue.opacity(0.3), radius: 5, x: 0, y: 3)
@@ -876,37 +831,14 @@ struct AlarmSettingsView: View {
                                 ForEach(viewModel.availableRingtones, id: \.self) { ringtone in
                                     Text(ringtone.replacingOccurrences(of: ".mp3", with: "")).tag(ringtone)
                                 }
-                                if viewModel.settings.isCustomRingtone {
-                                    let customName = viewModel.settings.ringtone.replacingOccurrences(of: ".mp3", with: "")
-                                    Text("Custom: \(customName)").tag(viewModel.settings.ringtone)
-                                }
                             }
                             .pickerStyle(.menu)
                             .foregroundColor(.white)
                             .padding()
                             .background(Color.gray.opacity(0.2))
                             .cornerRadius(10)
-                            .onChange(of: viewModel.settings.ringtone) { _, newValue in
-                                if viewModel.availableRingtones.contains(newValue) {
-                                    viewModel.settings.isCustomRingtone = false
-                                    viewModel.settings.customRingtoneURL = nil
-                                }
-                            }
-                            
-                            Button(action: {
-                                viewModel.presentDocumentPicker()
-                            }) {
-                                Text(viewModel.settings.isCustomRingtone ? "Replace Custom Ringtone" : "Upload Custom Ringtone")
-                                    .font(.headline)
-                                    .foregroundColor(.white)
-                                    .padding()
-                                    .frame(maxWidth: .infinity)
-                                    .background(Color.blue.opacity(0.8))
-                                    .cornerRadius(10)
-                            }
                             
                             Toggle("Snooze", isOn: $viewModel.settings.snooze)
-                                .feedbackDisabled()
                                 .foregroundColor(.white)
                                 .padding()
                                 .background(Color.gray.opacity(0.2))
@@ -919,8 +851,7 @@ struct AlarmSettingsView: View {
                         
                         HStack(spacing: 20) {
                             Button(action: {
-                                UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
-                                viewModel.closeSettings()
+                                viewModel.activeModal = .none
                                 dismiss()
                             }) {
                                 Text("Cancel")
@@ -933,8 +864,8 @@ struct AlarmSettingsView: View {
                             }
                             
                             Button(action: {
-                                UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
                                 viewModel.updateAlarmSettings()
+                                viewModel.activeModal = .none
                                 dismiss()
                             }) {
                                 Text("Update Settings")
@@ -943,11 +874,7 @@ struct AlarmSettingsView: View {
                                     .padding()
                                     .frame(maxWidth: .infinity)
                                     .background(
-                                        LinearGradient(
-                                            gradient: Gradient(colors: [Color.red, Color.orange]),
-                                            startPoint: .leading,
-                                            endPoint: .trailing
-                                        )
+                                        LinearGradient(gradient: Gradient(colors: [Color.red, Color.orange]), startPoint: .leading, endPoint: .trailing)
                                     )
                                     .cornerRadius(10)
                                     .shadow(color: Color.red.opacity(0.3), radius: 5, x: 0, y: 3)
@@ -959,59 +886,6 @@ struct AlarmSettingsView: View {
                 }
             }
             .navigationBarHidden(true)
-            .sheet(isPresented: $viewModel.showDocumentPicker) {
-                DocumentPicker(viewModel: viewModel)
-            }
         }
-    }
-}
-
-struct DocumentPicker: UIViewControllerRepresentable {
-    @ObservedObject var viewModel: AlarmViewModel
-    
-    func makeUIViewController(context: Context) -> UIDocumentPickerViewController {
-        let picker = UIDocumentPickerViewController(forOpeningContentTypes: [UTType.audio])
-        picker.delegate = context.coordinator
-        return picker
-    }
-    
-    func updateUIViewController(_ uiViewController: UIDocumentPickerViewController, context: Context) {}
-    
-    func makeCoordinator() -> Coordinator {
-        Coordinator(self)
-    }
-    
-    class Coordinator: NSObject, UIDocumentPickerDelegate {
-        var parent: DocumentPicker
-        
-        init(_ parent: DocumentPicker) {
-            self.parent = parent
-        }
-        
-        func documentPicker(_ controller: UIDocumentPickerViewController, didPickDocumentsAt urls: [URL]) {
-            guard let url = urls.first else { return }
-            parent.viewModel.handleSelectedAudioFile(url: url)
-        }
-        
-        func documentPickerWasCancelled(_ controller: UIDocumentPickerViewController) {
-            parent.viewModel.showDocumentPicker = false
-        }
-    }
-}
-
-extension View {
-    func feedbackDisabled() -> some View {
-        self.environment(\.isHapticFeedbackEnabled, false)
-    }
-}
-
-struct HapticFeedbackEnvironmentKey: EnvironmentKey {
-    static let defaultValue: Bool = true
-}
-
-extension EnvironmentValues {
-    var isHapticFeedbackEnabled: Bool {
-        get { self[HapticFeedbackEnvironmentKey.self] }
-        set { self[HapticFeedbackEnvironmentKey.self] = newValue }
     }
 }
