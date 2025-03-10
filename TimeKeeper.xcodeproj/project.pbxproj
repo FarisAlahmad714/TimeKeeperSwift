@@ -33,17 +33,29 @@
 		A179878B2D75D72D0069E100 /* Exceptions for "TimeKeeper" folder in "TimeKeeper" target */ = {
 			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
 			membershipExceptions = (
+				.swift,
 				Info.plist,
 			);
 			target = A179872E2D751EA30069E100 /* TimeKeeper */;
 		};
 /* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
 
+/* Begin PBXFileSystemSynchronizedGroupBuildPhaseMembershipExceptionSet section */
+		A17913642D7DFF1D005F3ABD /* Exceptions for "TimeKeeper" folder in "Compile Sources" phase from "TimeKeeper" target */ = {
+			isa = PBXFileSystemSynchronizedGroupBuildPhaseMembershipExceptionSet;
+			buildPhase = A179872B2D751EA30069E100 /* Sources */;
+			membershipExceptions = (
+				.swift,
+			);
+		};
+/* End PBXFileSystemSynchronizedGroupBuildPhaseMembershipExceptionSet section */
+
 /* Begin PBXFileSystemSynchronizedRootGroup section */
 		A17987312D751EA30069E100 /* TimeKeeper */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
 			exceptions = (
 				A179878B2D75D72D0069E100 /* Exceptions for "TimeKeeper" folder in "TimeKeeper" target */,
+				A17913642D7DFF1D005F3ABD /* Exceptions for "TimeKeeper" folder in "Compile Sources" phase from "TimeKeeper" target */,
 			);
 			path = TimeKeeper;
 			sourceTree = "<group>";

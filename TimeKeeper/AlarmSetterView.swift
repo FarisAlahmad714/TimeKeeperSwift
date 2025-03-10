@@ -2,6 +2,7 @@ import SwiftUI
 
 struct AlarmSetterView: View {
     @EnvironmentObject var viewModel: AlarmViewModel
+    @StateObject private var spaceshipViewModel = SpaceshipViewModel() // Add SpaceshipViewModel
     @State private var selectedTime: Date = Date()
     @State private var isDragging = false
     @State private var showAlarmsView = false
@@ -10,6 +11,7 @@ struct AlarmSetterView: View {
     @State private var treeOffset: CGFloat = UIScreen.main.bounds.width
     @State private var humanOffset: CGFloat = UIScreen.main.bounds.width
     @State private var carOffset: CGFloat = -100
+    @State private var showSpaceships: Bool = false // Control spaceship visibility
 
     private let timeFormatter: DateFormatter = {
         let formatter = DateFormatter()
@@ -142,6 +144,22 @@ struct AlarmSetterView: View {
                             .onChange(of: sliderProgress) { _, newValue in withAnimation(.easeInOut(duration: 1.0)) { humanOffset = newValue > 0.7 ? UIScreen.main.bounds.width : humanOffset } }
                     }
                     
+                    // Spaceship layer - Add spaceships between environment elements and sun/moon
+                    if showSpaceships, let activeShip = spaceshipViewModel.activeSpaceship, activeShip.visible {
+                        SpaceshipView(spaceship: activeShip) {
+                            spaceshipViewModel.logInteraction()
+                        }
+                        .environmentObject(spaceshipViewModel)
+                        
+                        // Debug info to confirm spaceship is active
+                        Text("Spaceship: \(activeShip.name)")
+                            .foregroundColor(.white)
+                            .background(Color.black.opacity(0.5))
+                            .padding(5)
+                            .cornerRadius(5)
+                            .position(x: geometry.size.width / 2, y: 40)
+                    }
+                    
                     ZStack {
                         if isDayTime {
                             ZStack {
@@ -195,6 +213,9 @@ struct AlarmSetterView: View {
                                                 sunMoonOffset = progress - 0.5
                                                 isDayTime = calendar.component(.hour, from: selectedTime) >= 6 && calendar.component(.hour, from: selectedTime) < 18
                                             }
+                                            
+                                            // Update spaceship behavior based on time
+                                            updateSpaceshipForTime()
                                         }
                                         .onEnded { _ in isDragging = false }
                                 )
@@ -223,9 +244,101 @@ struct AlarmSetterView: View {
                     }
                     .padding(.horizontal)
                     .position(x: geometry.size.width / 2, y: geometry.size.height - 50)
+                    
+                    // Spaceship toggle button
+                    Button(action: {
+                        if showSpaceships {
+                            showSpaceships = false
+                            spaceshipViewModel.stopFlying()
+                        } else {
+                            showSpaceships = true
+                            
+                            // Make sure we have a spaceship - force create if needed
+                            if spaceshipViewModel.activeSpaceship == nil {
+                                spaceshipViewModel.initializeDefaultSpaceships()
+                                // Force select the first ship
+                                if let firstShip = spaceshipViewModel.availableSpaceships.first {
+                                    spaceshipViewModel.selectSpaceship(firstShip)
+                                    print("Selected ship: \(firstShip.name)")
+                                } else {
+                                    print("No ships available to select")
+                                }
+                            }
+                            
+                            updateSpaceshipForTime()
+                            spaceshipViewModel.startFlying()
+                            
+                            // Debug what's happening
+                            if let ship = spaceshipViewModel.activeSpaceship {
+                                print("Showing spaceship: \(ship.name), visible: \(ship.visible), pos: \(ship.position)")
+                            } else {
+                                print("No active spaceship to show")
+                            }
+                        }
+                    }) {
+                        ZStack {
+                            Circle()
+                                .fill(showSpaceships ? Color.green.opacity(0.6) : Color.black.opacity(0.4))
+                                .frame(width: 40, height: 40)
+                            
+                            Image(systemName: "airplane")
+                                .resizable()
+                                .aspectRatio(contentMode: .fit)
+                                .frame(width: 20, height: 20)
+                                .foregroundColor(.white)
+                                .rotationEffect(.degrees(45))
+                        }
+                    }
+                    .position(x: geometry.size.width - 30, y: 80)
+                    
+                    // Spaceship selector button (appears only when spaceships are active)
+                    if showSpaceships {
+                        Button(action: {
+                            spaceshipViewModel.showSpaceshipSelector = true
+                        }) {
+                            ZStack {
+                                Circle()
+                                    .fill(Color.blue.opacity(0.4))
+                                    .frame(width: 40, height: 40)
+                                
+                                Image(systemName: "rectangle.grid.2x2")
+                                    .resizable()
+                                    .aspectRatio(contentMode: .fit)
+                                    .frame(width: 20, height: 20)
+                                    .foregroundColor(.white)
+                            }
+                        }
+                        .position(x: geometry.size.width - 30, y: 130)
+                    }
                 }
                 .navigationBarHidden(true)
                 .sheet(isPresented: $showAlarmsView) { AlarmsView() }
+                .sheet(isPresented: $spaceshipViewModel.showSpaceshipSelector) {
+                    SpaceshipSelectorView()
+                        .environmentObject(spaceshipViewModel)
+                }
+                .onAppear {
+                    // Initialize spaceship position and make sure spaceships are loaded
+                    if spaceshipViewModel.availableSpaceships.isEmpty {
+                        spaceshipViewModel.initializeDefaultSpaceships()
+                    }
+                    
+                    if spaceshipViewModel.activeSpaceship == nil, let firstShip = spaceshipViewModel.availableSpaceships.first {
+                        var updatedShip = firstShip
+                        updatedShip.position = CGPoint(x: geometry.size.width / 2, y: 100)
+                        updatedShip.visible = true
+                        updatedShip.scale = 1.5 // Make it bigger for visibility
+                        spaceshipViewModel.selectSpaceship(updatedShip)
+                        print("Initialized ship: \(updatedShip.name) at position \(updatedShip.position)")
+                    } else if let ship = spaceshipViewModel.activeSpaceship {
+                        var updatedShip = ship
+                        updatedShip.position = CGPoint(x: geometry.size.width / 2, y: 100)
+                        updatedShip.visible = true
+                        updatedShip.scale = 1.5 // Make it bigger for visibility
+                        spaceshipViewModel.activeSpaceship = updatedShip
+                        print("Updated existing ship: \(updatedShip.name) at position \(updatedShip.position)")
+                    }
+                }
             }
         }
     }
@@ -240,6 +353,9 @@ struct AlarmSetterView: View {
             sunMoonOffset = progress - 0.5
             isDayTime = calendar.component(.hour, from: selectedTime) >= 6 && calendar.component(.hour, from: selectedTime) < 18
         }
+        
+        // Update spaceship behavior based on time
+        updateSpaceshipForTime()
     }
     
     private func calculateSliderOffset(geometry: GeometryProxy) -> CGFloat {
@@ -254,6 +370,55 @@ struct AlarmSetterView: View {
         let a: CGFloat = 4 * heightRange
         let yOffset = -a * pow(normalizedProgress - 0.5, 2) + heightRange
         return baseY - yOffset
+    }
+    
+    // New function to adjust spaceship behavior based on selected time
+    private func updateSpaceshipForTime() {
+        guard let ship = spaceshipViewModel.activeSpaceship else { return }
+        
+        // Adjust spaceship behavior based on time of day
+        var updatedShip = ship
+        
+        // Make sure it's visible regardless of time
+        updatedShip.visible = true
+        
+        // For debugging, add a more extreme scale to make it visible
+        updatedShip.scale = 1.5
+        
+        // Dawn (5-7 AM): Special effect if premium
+        if sliderProgress >= 0.2083 && sliderProgress < 0.2917 {
+            updatedShip.speed = 1.5
+            if updatedShip.premium {
+                updatedShip.specialEffect = .glow
+            }
+        }
+        // Day (7 AM-5 PM): Normal behavior
+        else if sliderProgress >= 0.2917 && sliderProgress < 0.7083 {
+            updatedShip.speed = 1.0
+            if updatedShip.premium {
+                updatedShip.specialEffect = updatedShip.premium ? .trail : nil
+            }
+        }
+        // Dusk (5-7 PM): Special effect if premium
+        else if sliderProgress >= 0.7083 && sliderProgress < 0.7917 {
+            updatedShip.speed = 1.3
+            if updatedShip.premium {
+                updatedShip.specialEffect = .warpField
+            }
+        }
+        // Night (7 PM-5 AM): Enhanced visibility
+        else {
+            updatedShip.speed = 0.7
+            if updatedShip.premium {
+                updatedShip.specialEffect = .teleport
+            }
+        }
+        
+        // Force a specific position for debugging
+        let screenSize = UIScreen.main.bounds.size
+        updatedShip.position = CGPoint(x: screenSize.width/2, y: screenSize.height/3)
+        
+        spaceshipViewModel.activeSpaceship = updatedShip
     }
 }
 
@@ -1604,16 +1769,7 @@ struct WaveShape: Shape {
     }
 }
 
-struct Triangle: Shape {
-    func path(in rect: CGRect) -> Path {
-        var path = Path()
-        path.move(to: CGPoint(x: rect.minX, y: rect.maxY))
-        path.addLine(to: CGPoint(x: rect.midX, y: rect.minY))
-        path.addLine(to: CGPoint(x: rect.maxX, y: rect.maxY))
-        path.closeSubpath()
-        return path
-    }
-}
+
 
 extension Color {
     func lerp(to endColor: Color, t: Double) -> Color {
@@ -1630,6 +1786,9 @@ extension Color {
 // MARK: - Preview
 struct AlarmSetterView_Previews: PreviewProvider {
     static var previews: some View {
-        AlarmSetterView().environmentObject(AlarmViewModel()).preferredColorScheme(.dark)
+        AlarmSetterView()
+            .environmentObject(AlarmViewModel())
+            .environmentObject(SpaceshipViewModel())
+            .preferredColorScheme(.dark)
     }
 }
