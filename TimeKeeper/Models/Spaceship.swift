@@ -5,9 +5,6 @@
 //  Created by Faris Alahmad on 3/9/25.
 //
 
-
-// SpaceshipModels.swift
-
 import SwiftUI
 
 // Base model for all spaceship types
