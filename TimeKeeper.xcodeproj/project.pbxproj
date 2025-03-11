@@ -6,6 +6,10 @@
 	objectVersion = 77;
 	objects = {
 
+/* Begin PBXBuildFile section */
+		A1860B682D7FC11000F71FD7 /* Kingfisher in Frameworks */ = {isa = PBXBuildFile; productRef = A1860B672D7FC11000F71FD7 /* Kingfisher */; };
+/* End PBXBuildFile section */
+
 /* Begin PBXContainerItemProxy section */
 		A17987412D751EAC0069E100 /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
@@ -33,29 +37,17 @@
 		A179878B2D75D72D0069E100 /* Exceptions for "TimeKeeper" folder in "TimeKeeper" target */ = {
 			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
 			membershipExceptions = (
-				.swift,
 				Info.plist,
 			);
 			target = A179872E2D751EA30069E100 /* TimeKeeper */;
 		};
 /* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
 
-/* Begin PBXFileSystemSynchronizedGroupBuildPhaseMembershipExceptionSet section */
-		A17913642D7DFF1D005F3ABD /* Exceptions for "TimeKeeper" folder in "Compile Sources" phase from "TimeKeeper" target */ = {
-			isa = PBXFileSystemSynchronizedGroupBuildPhaseMembershipExceptionSet;
-			buildPhase = A179872B2D751EA30069E100 /* Sources */;
-			membershipExceptions = (
-				.swift,
-			);
-		};
-/* End PBXFileSystemSynchronizedGroupBuildPhaseMembershipExceptionSet section */
-
 /* Begin PBXFileSystemSynchronizedRootGroup section */
 		A17987312D751EA30069E100 /* TimeKeeper */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
 			exceptions = (
 				A179878B2D75D72D0069E100 /* Exceptions for "TimeKeeper" folder in "TimeKeeper" target */,
-				A17913642D7DFF1D005F3ABD /* Exceptions for "TimeKeeper" folder in "Compile Sources" phase from "TimeKeeper" target */,
 			);
 			path = TimeKeeper;
 			sourceTree = "<group>";
@@ -77,6 +69,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				A1860B682D7FC11000F71FD7 /* Kingfisher in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -137,6 +130,7 @@
 			);
 			name = TimeKeeper;
 			packageProductDependencies = (
+				A1860B672D7FC11000F71FD7 /* Kingfisher */,
 			);
 			productName = TimeKeeper;
 			productReference = A179872F2D751EA30069E100 /* TimeKeeper.app */;
@@ -221,6 +215,7 @@
 			mainGroup = A17987262D751EA30069E100;
 			minimizedProjectReferenceProxies = 1;
 			packageReferences = (
+				A1860B662D7FC10F00F71FD7 /* XCRemoteSwiftPackageReference "Kingfisher" */,
 			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = A17987302D751EA30069E100 /* Products */;
@@ -446,6 +441,7 @@
 				SWIFT_EMIT_LOC_STRINGS = YES;
 				SWIFT_VERSION = 5.0;
 				TARGETED_DEVICE_FAMILY = "1,2,7";
+				UNSPLASH_API_KEY = "CkDsNruz-DKh9T4D7_AszD1HsGFLMntW25-zhQGH7lk";
 				XROS_DEPLOYMENT_TARGET = 2.1;
 			};
 			name = Debug;
@@ -486,6 +482,7 @@
 				SWIFT_EMIT_LOC_STRINGS = YES;
 				SWIFT_VERSION = 5.0;
 				TARGETED_DEVICE_FAMILY = "1,2,7";
+				UNSPLASH_API_KEY = "CkDsNruz-DKh9T4D7_AszD1HsGFLMntW25-zhQGH7lk";
 				XROS_DEPLOYMENT_TARGET = 2.1;
 			};
 			name = Release;
@@ -620,6 +617,25 @@
 			defaultConfigurationName = Release;
 		};
 /* End XCConfigurationList section */
+
+/* Begin XCRemoteSwiftPackageReference section */
+		A1860B662D7FC10F00F71FD7 /* XCRemoteSwiftPackageReference "Kingfisher" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/onevcat/Kingfisher.git";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 8.3.0;
+			};
+		};
+/* End XCRemoteSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		A1860B672D7FC11000F71FD7 /* Kingfisher */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = A1860B662D7FC10F00F71FD7 /* XCRemoteSwiftPackageReference "Kingfisher" */;
+			productName = Kingfisher;
+		};
+/* End XCSwiftPackageProductDependency section */
 	};
 	rootObject = A17987272D751EA30069E100 /* Project object */;
 }

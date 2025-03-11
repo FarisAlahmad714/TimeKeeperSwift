@@ -1,16 +1,14 @@
-///
-//  WorldClockView.swift
-//  TimeKeeper
-//
-//  Created by Faris Alahmad on 3/2/25.
-//
+// WorldClockView.swift
+// TimeKeeper
+// Created by Faris Alahmad on 3/2/25.
 
 import SwiftUI
+import Kingfisher
 
 struct WorldClockView: View {
     @EnvironmentObject var viewModel: WorldClockViewModel
     @State private var draggedClock: WorldClock?
-    @State private var editingClock: WorldClock? // For editing an existing clock
+    @State private var editingClock: WorldClock?
     @State private var showingEditModal = false
     
     var body: some View {
@@ -18,13 +16,11 @@ struct WorldClockView: View {
             ZStack {
                 Color.black.edgesIgnoringSafeArea(.all)
                 VStack(spacing: 20) {
-                    // Header
                     Text("World Clock")
                         .font(.system(size: 34, weight: .bold))
                         .foregroundColor(.white)
                         .padding(.top, 20)
                     
-                    // Add Clock Button
                     Button(action: {
                         viewModel.showAddClockModal = true
                     }) {
@@ -50,7 +46,6 @@ struct WorldClockView: View {
                     
                     Spacer()
                     
-                    // Node-like Clocks
                     ScrollView {
                         ZStack {
                             ForEach(viewModel.clocks) { clock in
@@ -107,11 +102,8 @@ struct WorldClockView: View {
             }
         }
     }
-    
-    private func timezoneName(from identifier: String) -> String {
-        identifier.split(separator: "/").last?.replacingOccurrences(of: "_", with: " ") ?? identifier
-    }
 }
+
 
 struct ClockNodeView: View {
     let clock: WorldClock
@@ -121,32 +113,40 @@ struct ClockNodeView: View {
     
     var body: some View {
         ZStack {
-            Circle()
-                .fill(
-                    LinearGradient(
-                        gradient: Gradient(colors: [Color.gray.opacity(0.4), Color.gray.opacity(0.2)]),
-                        startPoint: .top,
-                        endPoint: .bottom
-                    )
-                )
-                .frame(width: 120, height: 120)
-                .shadow(color: Color.white.opacity(0.3), radius: 5, x: 0, y: 3)
+            if let imageURL = clock.imageURL {
+                KFImage(imageURL)
+                    .placeholder {
+                        ProgressView()
+                            .frame(width: 120, height: 120)
+                    }
+                    .resizable()
+                    .scaledToFill()
+                    .frame(width: 120, height: 120)
+                    .clipShape(Circle())
+                    .overlay(Circle().stroke(Color.white, lineWidth: 2))
+            } else {
+                Circle()
+                    .fill(Color.gray.opacity(0.4))
+                    .frame(width: 120, height: 120)
+            }
             
             VStack(spacing: 5) {
                 Text(timezoneName(from: clock.timezone))
-                    .font(.subheadline)
+                    .font(.system(size: 18, weight: .semibold))
                     .foregroundColor(.white)
-                    .lineLimit(1)
+                    .shadow(color: .black, radius: 1, x: 0, y: 1)
                 
                 Text(time)
-                    .font(.title2)
-                    .foregroundColor(.red)
+                    .font(.system(size: 24, weight: .bold))
+                    .foregroundColor(.white)
+                    .shadow(color: .black, radius: 1, x: 0, y: 1)
                 
                 Text(date)
-                    .font(.caption)
-                    .foregroundColor(.gray)
+                    .font(.system(size: 14))
+                    .foregroundColor(.white.opacity(0.8))
+                    .shadow(color: .black, radius: 1, x: 0, y: 1)
             }
-            .padding()
+            .offset(y: -30)
         }
         .position(position)
     }
@@ -177,15 +177,12 @@ struct AddClockView: View {
             ZStack {
                 Color.black.edgesIgnoringSafeArea(.all)
                 VStack(spacing: 20) {
-                    // Header
                     Text("Add Clock")
                         .font(.system(size: 28, weight: .bold))
                         .foregroundColor(.white)
                         .padding(.top, 20)
                     
-                    // Timezone Picker Card
                     VStack(spacing: 15) {
-                        // Search Bar
                         TextField("Search Timezones", text: $searchText)
                             .foregroundColor(.white)
                             .padding()
@@ -197,13 +194,11 @@ struct AddClockView: View {
                             )
                             .padding(.horizontal)
                             .onChange(of: searchText) { newValue in
-                                // Ensure selectedTimezone is valid after filtering
                                 if !filteredTimezones.contains(selectedTimezone) && !filteredTimezones.isEmpty {
                                     selectedTimezone = filteredTimezones.first!
                                 }
                             }
                         
-                        // Timezone Picker (Using List instead of Wheel)
                         ScrollView {
                             LazyVStack(spacing: 10) {
                                 ForEach(filteredTimezones, id: \.self) { timezone in
@@ -232,14 +227,13 @@ struct AddClockView: View {
                             }
                             .padding(.horizontal)
                         }
-                        .frame(maxHeight: 300) // Limit height to avoid taking up too much space
+                        .frame(maxHeight: 300)
                     }
                     .padding()
                     .background(Color.gray.opacity(0.1))
                     .cornerRadius(15)
                     .padding(.horizontal)
                     
-                    // Action Buttons
                     HStack(spacing: 20) {
                         Button(action: {
                             dismiss()
@@ -315,15 +309,12 @@ struct EditClockView: View {
             ZStack {
                 Color.black.edgesIgnoringSafeArea(.all)
                 VStack(spacing: 20) {
-                    // Header
                     Text("Edit Clock")
                         .font(.system(size: 28, weight: .bold))
                         .foregroundColor(.white)
                         .padding(.top, 20)
                     
-                    // Timezone Picker Card
                     VStack(spacing: 15) {
-                        // Search Bar
                         TextField("Search Timezones", text: $searchText)
                             .foregroundColor(.white)
                             .padding()
@@ -340,7 +331,6 @@ struct EditClockView: View {
                                 }
                             }
                         
-                        // Timezone Picker
                         ScrollView {
                             LazyVStack(spacing: 10) {
                                 ForEach(filteredTimezones, id: \.self) { timezone in
@@ -376,7 +366,6 @@ struct EditClockView: View {
                     .cornerRadius(15)
                     .padding(.horizontal)
                     
-                    // Action Buttons
                     HStack(spacing: 20) {
                         Button(action: {
                             dismiss()
@@ -391,11 +380,7 @@ struct EditClockView: View {
                         }
                         
                         Button(action: {
-                            if let index = viewModel.clocks.firstIndex(where: { $0.id == clock.id }) {
-                                let updatedPosition = viewModel.clocks[index].position
-                                viewModel.clocks[index] = WorldClock(timezone: selectedTimezone, position: updatedPosition)
-                                viewModel.saveClocks()
-                            }
+                            viewModel.updateClockTimezone(id: clock.id, newTimezone: selectedTimezone)
                             dismiss()
                         }) {
                             Text("Update Clock")
