@@ -1,6 +1,5 @@
 // WorldClockViewModel.swift
-// TimeKeeper
-// Created by Faris Alahmad on 3/2/25.
+
 import Foundation
 import SwiftUI
 import Kingfisher
@@ -96,8 +95,9 @@ class WorldClockViewModel: ObservableObject {
 
     func timeForTimezone(_ timezone: String) -> String {
         let formatter = DateFormatter()
-        formatter.dateFormat = "HH:mm:ss"
+        formatter.dateFormat = "h:mm:ss a"  // 12-hour format with AM/PM
         formatter.timeZone = TimeZone(identifier: timezone)
+        formatter.locale = Locale(identifier: "en_US")  // Ensures AM/PM display
         return formatter.string(from: currentTime)
     }
 
@@ -105,6 +105,7 @@ class WorldClockViewModel: ObservableObject {
         let formatter = DateFormatter()
         formatter.dateStyle = .medium
         formatter.timeZone = TimeZone(identifier: timezone)
+        formatter.locale = Locale(identifier: "en_US")  // Consistent locale
         return formatter.string(from: currentTime)
     }
 
@@ -124,33 +125,24 @@ class WorldClockViewModel: ObservableObject {
         }
 
         URLSession.shared.dataTask(with: url) { data, response, error in
-            if let error = error {
-                print("Network error: \(error.localizedDescription)")
+            guard let data = data, error == nil else {
+                print("Error fetching image URL for \(city): \(error?.localizedDescription ?? "Unknown error")")
                 completion(nil)
                 return
             }
-            
-            guard let data = data else {
-                print("No data received")
-                completion(nil)
-                return
-            }
-            
-            print("Raw API Response: \(String(data: data, encoding: .utf8) ?? "Invalid data")")
             
             do {
-                let decoder = JSONDecoder()
-                let unsplashResponse = try decoder.decode(UnsplashResponse.self, from: data)
-                if let firstPhoto = unsplashResponse.results.first,
-                   let smallURLString = firstPhoto.urls.small,
-                   let url = URL(string: smallURLString) {
-                    completion(url)
+                let json = try JSONSerialization.jsonObject(with: data, options: []) as? [String: Any]
+                if let results = json?["results"] as? [[String: Any]],
+                   let firstResult = results.first,
+                   let urls = firstResult["urls"] as? [String: String],
+                   let smallURL = urls["small"] {
+                    completion(URL(string: smallURL))
                 } else {
-                    print("No suitable image found for \(city)")
                     completion(nil)
                 }
             } catch {
-                print("Decoding error: \(error)")
+                print("Error parsing Unsplash response for \(city): \(error)")
                 completion(nil)
             }
         }.resume()
@@ -163,26 +155,9 @@ class WorldClockViewModel: ObservableObject {
 }
 
 func getAPIKey() -> String? {
-    if let apiKey = Bundle.main.object(forInfoDictionaryKey: "UnsplashAPIKey") as? String {
-        print("API Key found: \(apiKey)")
-        return apiKey
-    } else {
+    guard let apiKey = Bundle.main.object(forInfoDictionaryKey: "UnsplashAPIKey") as? String else {
         print("Error: UnsplashAPIKey not found in Info.plist")
         return nil
     }
-}
-
-// MARK: - Unsplash API Response Models
-struct UnsplashResponse: Codable {
-    let results: [UnsplashPhoto]
-}
-
-struct UnsplashPhoto: Codable {
-    let id: String
-    let urls: UnsplashURLs
-}
-
-struct UnsplashURLs: Codable {
-    let small: String?
-    let regular: String?
+    return apiKey
 }

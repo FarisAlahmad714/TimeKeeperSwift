@@ -113,40 +113,44 @@ struct ClockNodeView: View {
     
     var body: some View {
         ZStack {
+            // Image or placeholder circle
             if let imageURL = clock.imageURL {
                 KFImage(imageURL)
                     .placeholder {
                         ProgressView()
-                            .frame(width: 120, height: 120)
+                            .frame(width: 180, height: 180)
                     }
                     .resizable()
                     .scaledToFill()
-                    .frame(width: 120, height: 120)
+                    .frame(width: 180, height: 180)
                     .clipShape(Circle())
-                    .overlay(Circle().stroke(Color.white, lineWidth: 2))
+                    .overlay(Circle().stroke(Color.white, lineWidth: 1))
             } else {
                 Circle()
                     .fill(Color.gray.opacity(0.4))
-                    .frame(width: 120, height: 120)
+                    .frame(width: 180, height: 180)
+                    .overlay(Circle().stroke(Color.white, lineWidth: 1))
             }
             
-            VStack(spacing: 5) {
+            // Text with semi-transparent background
+            VStack(spacing: 2) {
                 Text(timezoneName(from: clock.timezone))
-                    .font(.system(size: 18, weight: .semibold))
+                    .font(.system(size: 16))
                     .foregroundColor(.white)
-                    .shadow(color: .black, radius: 1, x: 0, y: 1)
                 
                 Text(time)
                     .font(.system(size: 24, weight: .bold))
                     .foregroundColor(.white)
-                    .shadow(color: .black, radius: 1, x: 0, y: 1)
                 
                 Text(date)
-                    .font(.system(size: 14))
+                    .font(.system(size: 12))
                     .foregroundColor(.white.opacity(0.8))
-                    .shadow(color: .black, radius: 1, x: 0, y: 1)
             }
-            .offset(y: -30)
+            .padding(10)
+            .background(
+                RoundedRectangle(cornerRadius: 10)
+                    .fill(Color.black.opacity(0.5))
+            )
         }
         .position(position)
     }
@@ -155,7 +159,6 @@ struct ClockNodeView: View {
         identifier.split(separator: "/").last?.replacingOccurrences(of: "_", with: " ") ?? identifier
     }
 }
-
 struct AddClockView: View {
     @EnvironmentObject var viewModel: WorldClockViewModel
     @Environment(\.dismiss) var dismiss

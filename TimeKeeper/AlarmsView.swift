@@ -35,18 +35,6 @@ struct AlarmsView: View {
                                 .cornerRadius(10)
                                 .shadow(color: Color.red.opacity(0.3), radius: 5, x: 0, y: 3)
                         }
-                        
-                        Button(action: {
-                            viewModel.clearAllNotifications()
-                        }) {
-                            Text("Clear Notifications")
-                                .font(.headline)
-                                .foregroundColor(.white)
-                                .padding()
-                                .frame(maxWidth: .infinity)
-                                .background(Color.gray.opacity(0.5))
-                                .cornerRadius(10)
-                        }
                     }
                     .padding(.horizontal)
                     .padding(.bottom, 10)
