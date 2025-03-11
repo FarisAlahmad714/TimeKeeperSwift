@@ -11,39 +11,48 @@ struct SpaceshipView: View {
     @State private var adDisplayTime: TimeInterval = 0
     
     var body: some View {
+        // Main ship container - no transformations here
         ZStack {
-            // The spaceship image with fallback to SF Symbols
-            Group {
-                if UIImage(named: spaceship.imageAsset) != nil {
-                    Image(spaceship.imageAsset)
-                        .resizable()
-                        .aspectRatio(contentMode: .fit)
+            // Ship and thruster group that gets flipped together
+            ZStack {
+                // Thruster effect positioned based on direction
+                if viewModel.isMovingRight {
+                    // When moving right, position thruster on left and pointing left
+                    ThrusterFlames(movingRight: true)
+                        .offset(x: -40, y: 0)
                 } else {
-                    // Fallback to SF Symbol
-                    Image(systemName: getSystemImageName(for: spaceship.name))
-                        .resizable()
-                        .aspectRatio(contentMode: .fit)
+                    // When moving left, position thruster on right and pointing right
+                    ThrusterFlames(movingRight: false)
+                        .offset(x: 40, y: 0)
                 }
+                
+                // The spaceship image with fallback to SF Symbols
+                Group {
+                    if UIImage(named: spaceship.imageAsset) != nil {
+                        Image(spaceship.imageAsset)
+                            .resizable()
+                            .aspectRatio(contentMode: .fit)
+                    } else {
+                        // Fallback to SF Symbol
+                        Image(systemName: getSystemImageName(for: spaceship.name))
+                            .resizable()
+                            .aspectRatio(contentMode: .fit)
+                    }
+                }
+                .frame(width: 80 * spaceship.scale, height: 80 * spaceship.scale)
+                .scaleEffect(1.0 + 0.05 * sin(animationPhase))
+                .shadow(color: specialEffectColor, radius: specialEffectRadius, x: 0, y: 0)
             }
-            .frame(width: 80 * spaceship.scale, height: 80 * spaceship.scale)
-            .rotationEffect(Angle(radians: spaceship.rotation))
-            .scaleEffect(1.0 + 0.05 * sin(animationPhase))
-            .shadow(color: specialEffectColor, radius: specialEffectRadius, x: 0, y: 0)
+            // Flip the ship and thrusters based on direction
+            .scaleEffect(x: viewModel.isMovingRight ? 1 : -1, y: 1)
             
-            // Add thruster effect behind the spaceship
-            // Fixed position to match the current orientation (facing right)
-            TrailEffect()
-                .scaleEffect(spaceship.scale * 0.8)
-                .offset(x: 40, y: 0) // Position on right side of the ship
-            
-            // Banner/Ad if one is attached to this ship - now always visible
+            // Banner/Ad if one is attached to this ship - NOT flipped
             if let adContent = spaceship.adContent, adContent.isActive {
                 AdBannerView(adContent: adContent)
                     .frame(width: 150, height: 40)
                     .offset(y: -60)
             }
         }
-        .position(spaceship.position)
         .onAppear {
             // Start subtle animation
             withAnimation(Animation.easeInOut(duration: 1.5).repeatForever(autoreverses: true)) {
@@ -120,8 +129,9 @@ struct SpaceshipView: View {
     }
 }
 
-// Enhanced trail effect that looks like spaceship thrusters - FIXED POSITIONING
-struct TrailEffect: View {
+// Simplified thruster flames component
+struct ThrusterFlames: View {
+    var movingRight: Bool
     @State private var flameAnimation: Double = 0
     @State private var sparkleOffset: CGFloat = 0
     
@@ -130,25 +140,23 @@ struct TrailEffect: View {
             // Main flame
             ZStack {
                 // Inner flame - bright center
-                SpaceshipTriangle()
+                Triangle()
                     .fill(LinearGradient(
                         gradient: Gradient(colors: [.white, .yellow, .orange]),
-                        startPoint: .trailing, // REVERSED
-                        endPoint: .leading     // REVERSED
+                        startPoint: .leading,
+                        endPoint: .trailing
                     ))
                     .frame(width: 35 + CGFloat(sin(flameAnimation) * 5), height: 16)
-                    .offset(x: -40) // REVERSED
                     .blur(radius: 1)
                 
                 // Outer flame
-                SpaceshipTriangle()
+                Triangle()
                     .fill(LinearGradient(
                         gradient: Gradient(colors: [.orange, .red, .red.opacity(0.5)]),
-                        startPoint: .trailing, // REVERSED
-                        endPoint: .leading     // REVERSED
+                        startPoint: .leading,
+                        endPoint: .trailing
                     ))
                     .frame(width: 45 + CGFloat(sin(flameAnimation) * 8), height: 22)
-                    .offset(x: -45) // REVERSED
                     .blur(radius: 2)
                 
                 // Flame particles
@@ -156,11 +164,11 @@ struct TrailEffect: View {
                     Circle()
                         .fill(LinearGradient(
                             gradient: Gradient(colors: [.orange, .red, .clear]),
-                            startPoint: .trailing, // REVERSED
-                            endPoint: .leading     // REVERSED
+                            startPoint: .leading,
+                            endPoint: .trailing
                         ))
                         .frame(width: CGFloat.random(in: 4...7), height: CGFloat.random(in: 4...7))
-                        .offset(x: -55 - CGFloat(i) * 5 - sparkleOffset, // REVERSED
+                        .offset(x: 10 + CGFloat(i) * 5 + sparkleOffset,
                                 y: CGFloat.random(in: -10...10))
                         .opacity(0.7)
                         .blur(radius: 1)
@@ -173,7 +181,8 @@ struct TrailEffect: View {
                     Circle()
                         .fill(Color.gray.opacity(0.3 - Double(i) * 0.05))
                         .frame(width: 12 + CGFloat(i) * 2, height: 12 + CGFloat(i) * 2)
-                        .offset(x: -55 - CGFloat(i) * 8, y: CGFloat.random(in: -5...5)) // REVERSED
+                        .offset(x: 15 + CGFloat(i) * 8,
+                                y: CGFloat.random(in: -5...5))
                         .blur(radius: CGFloat(1 + i))
                 }
             }
@@ -189,19 +198,6 @@ struct TrailEffect: View {
                 sparkleOffset = 3
             }
         }
-    }
-}
-
-// SpaceshipTriangle is renamed to avoid conflict with your existing Triangle shape
-struct SpaceshipTriangle: Shape {
-    func path(in rect: CGRect) -> Path {
-        var path = Path()
-        // REVERSED directions
-        path.move(to: CGPoint(x: rect.maxX, y: rect.midY - rect.height/2))
-        path.addLine(to: CGPoint(x: rect.minX, y: rect.midY))
-        path.addLine(to: CGPoint(x: rect.maxX, y: rect.midY + rect.height/2))
-        path.closeSubpath()
-        return path
     }
 }
 
@@ -244,6 +240,8 @@ struct AdBannerView: View {
         }
     }
 }
+
+
 
 // Special effect components for premium ships
 struct GlowEffect: View {

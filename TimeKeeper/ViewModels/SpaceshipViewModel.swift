@@ -173,7 +173,18 @@ class SpaceshipViewModel: ObservableObject {
         guard !isFlying else { return }
         isFlying = true
         
-        animationTimer?.invalidate() // Ensure no duplicate timers
+        // Reset position if it's out of bounds
+        if var ship = activeSpaceship {
+            let screenWidth = UIScreen.main.bounds.width
+            if ship.position.x < -100 || ship.position.x > screenWidth + 100 ||
+               ship.position.y < 100 || ship.position.y > 300 {
+                ship.position = CGPoint(x: -50, y: 150)
+                isMovingRight = true
+                activeSpaceship = ship
+            }
+        }
+        
+        animationTimer?.invalidate()
         animationTimer = Timer.scheduledTimer(withTimeInterval: 0.02, repeats: true) { [weak self] _ in
             self?.updateSpaceshipPosition()
         }
@@ -189,39 +200,33 @@ class SpaceshipViewModel: ObservableObject {
         guard isFlying, var ship = activeSpaceship, orientation.isPortrait else { return }
         
         let screenSize = UIScreen.main.bounds.size
-        let rightEdge: CGFloat = screenSize.width + 80.0 // Explicitly typed as CGFloat
-        let leftEdge: CGFloat = -80.0 // Explicitly typed as CGFloat
+        let rightEdge: CGFloat = screenSize.width + 50.0
+        let leftEdge: CGFloat = -50.0
         
-        // Debug print to track position and direction
-        print("Position: \(ship.position.x), Moving Right: \(isMovingRight), Screen Width: \(screenSize.width), Speed: \(ship.speed)")
+        // Fixed Y position to ensure the spaceship stays at the intended height
+        let fixedY: CGFloat = 150.0  // This is the desired fixed height
         
-        // Adjust speed for 10 seconds per pass (48 units/second, 0.96 units per 0.02-second update)
+        // Apply horizontal movement based on direction
         if isMovingRight {
-            ship.position.x += CGFloat(ship.speed * 0.96)
+            ship.position.x += ship.speed * 2.0 // Increased speed for more noticeable movement
             if ship.position.x > rightEdge {
-                ship.position.x = leftEdge
                 isMovingRight = false
-                print("Switching to left at position: \(ship.position.x)")
+                print("Reached right edge, changing direction")
             }
         } else {
-            ship.position.x -= CGFloat(ship.speed * 0.96)
+            ship.position.x -= ship.speed * 2.0 // Increased speed for more noticeable movement
             if ship.position.x < leftEdge {
-                ship.position.x = rightEdge
                 isMovingRight = true
-                print("Switching to right at position: \(ship.position.x)")
+                print("Reached left edge, changing direction")
             }
         }
         
-        // Add slight vertical drift
-        let verticalDrift = sin(Date().timeIntervalSince1970 * 0.5) * 0.5
-        ship.position.y += CGFloat(verticalDrift)
+        // Set a completely fixed Y position instead of allowing drift
+        ship.position.y = fixedY
         
-        let minY: CGFloat = 80.0
-        let maxY: CGFloat = screenSize.height / 2
-        ship.position.y = min(max(ship.position.y, minY), maxY)
-        
-        // Set rotation based on direction
-        ship.rotation = isMovingRight ? 0 : 180
+        // Important: Don't rotate the ship - we'll handle direction via scale effect in the view
+        // ship.rotation = isMovingRight ? 0 : 180  <-- Removing this line
+        ship.rotation = 0 // Keep consistent rotation
         
         activeSpaceship = ship
         
