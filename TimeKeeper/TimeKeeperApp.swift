@@ -1,5 +1,7 @@
 // TimeKeeperApp.swift
 
+// TimeKeeperApp.swift
+
 import SwiftUI
 import UserNotifications
 
@@ -10,6 +12,7 @@ struct TimeKeeperApp: App {
     @StateObject var stopwatchViewModel = StopwatchViewModel()
     @StateObject var timerViewModel = TimerViewModel()
     @StateObject var worldClockViewModel = WorldClockViewModel()
+    @StateObject var spaceshipViewModel = SpaceshipViewModel() // Add SpaceshipViewModel
     
     init() {
         UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound, .badge]) { granted, error in
@@ -30,7 +33,8 @@ struct TimeKeeperApp: App {
                 .environmentObject(stopwatchViewModel)
                 .environmentObject(timerViewModel)
                 .environmentObject(worldClockViewModel)
+                .environmentObject(spaceshipViewModel) // Add SpaceshipViewModel
                 .accentColor(.red)
         }
     }
-}	
+}
