@@ -1,6 +1,9 @@
-// WorldClockView.swift
-// TimeKeeper
-// Created by Faris Alahmad on 3/2/25.
+//
+//  WorldClockView.swift
+//  TimeKeeper
+//
+//  Created by Faris Alahmad on 3/2/25.
+//
 
 import SwiftUI
 import Kingfisher
@@ -16,10 +19,17 @@ struct WorldClockView: View {
             ZStack {
                 Color.black.edgesIgnoringSafeArea(.all)
                 VStack(spacing: 20) {
-                    Text("World Clock")
-                        .font(.system(size: 34, weight: .bold))
-                        .foregroundColor(.white)
-                        .padding(.top, 20)
+                    // Updated title section with subtitle
+                    VStack(spacing: 5) {
+                        Text("World Clock")
+                            .font(.system(size: 34, weight: .bold))
+                            .foregroundColor(.white)
+                            .padding(.top, 20)
+                        
+                        Text("Make the world your canvas")
+                            .font(.system(size: 18, weight: .light))
+                            .foregroundColor(.white.opacity(0.7))
+                    }
                     
                     Button(action: {
                         viewModel.showAddClockModal = true
@@ -104,7 +114,6 @@ struct WorldClockView: View {
     }
 }
 
-
 struct ClockNodeView: View {
     let clock: WorldClock
     let time: String
@@ -159,6 +168,7 @@ struct ClockNodeView: View {
         identifier.split(separator: "/").last?.replacingOccurrences(of: "_", with: " ") ?? identifier
     }
 }
+
 struct AddClockView: View {
     @EnvironmentObject var viewModel: WorldClockViewModel
     @Environment(\.dismiss) var dismiss

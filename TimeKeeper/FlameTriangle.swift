@@ -4,15 +4,6 @@
 //
 //  Created by Faris Alahmad on 3/10/25.
 //
-
-
-//
-//  IslandShapes.swift
-//  TimeKeeper
-//
-//  Created by Faris Alahmad on 3/10/25.
-//
-
 import SwiftUI
 
 // Triangle shape used for visual effects in the app
