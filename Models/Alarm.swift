@@ -1,13 +1,10 @@
-
-//  Alarm.swift
-//  TimeKeeper
-//
-//  Created by Faris Alahmad on 3/2/25.
-//
+// Alarm.swift
+// TimeKeeper
+// Created by Faris Alahmad on 3/2/25
 
 import Foundation
 
-struct Alarm: Identifiable, Codable {
+struct Alarm: Identifiable, Codable, Equatable {
     var id: String
     var name: String
     var description: String
@@ -19,6 +16,11 @@ struct Alarm: Identifiable, Codable {
     var isCustomRingtone: Bool
     var customRingtoneURL: URL?
     var snooze: Bool
+    
+    // Conform to Equatable
+    static func == (lhs: Alarm, rhs: Alarm) -> Bool {
+        return lhs.id == rhs.id // Compare based on unique ID
+    }
     
     // Add this custom initializer
     init(id: String, name: String, description: String, times: [Date], dates: [Date], instances: [AlarmInstance]?, status: Bool, ringtone: String, isCustomRingtone: Bool, customRingtoneURL: URL?, snooze: Bool) {
@@ -36,7 +38,7 @@ struct Alarm: Identifiable, Codable {
     }
     
     var isEventAlarm: Bool {
-        return instances != nil && instances!.count > 1
+        return instances != nil && !instances!.isEmpty // Changed to check for non-empty
     }
     
     enum CodingKeys: String, CodingKey {

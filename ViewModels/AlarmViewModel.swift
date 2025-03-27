@@ -1,11 +1,30 @@
 import Foundation
 import SwiftUI
 import UserNotifications
-import AVFoundation
+
+// Define ModalState enum
+enum ModalState: String {
+    case none
+    case choice
+    case singleAlarm
+    case eventAlarm
+    case settings
+    case editSingleAlarm
+    case addInstance
+    case editInstance
+}
+
+// Define AlarmSettings struct
+struct AlarmSettings {
+    var ringtone: String
+    var isCustomRingtone: Bool
+    var customRingtoneURL: URL?
+    var snooze: Bool
+}
 
 class AlarmViewModel: ObservableObject {
     @Published var alarms: [Alarm] = []
-    @Published var activeModal: ModalState = .none // Now ModalState is accessible
+    @Published var activeModal: ModalState = .none
     
     @Published var selectedEvent: Alarm?
     @Published var selectedInstance: AlarmInstance?
@@ -38,6 +57,7 @@ class AlarmViewModel: ObservableObject {
     }
     
     func presentDocumentPicker() {
+        // Implementation for document picker
     }
     
     func handleSelectedAudioFile(url: URL) {
@@ -72,6 +92,13 @@ class AlarmViewModel: ObservableObject {
             if let decoded = try? JSONDecoder().decode([Alarm].self, from: data) {
                 self.alarms = decoded
                 print("Alarms loaded: \(decoded.count)")
+                
+                // Schedule notifications for all loaded alarms
+                for alarm in self.alarms {
+                    if alarm.status {
+                        self.scheduleNotifications(for: alarm)
+                    }
+                }
                 return
             }
         }
@@ -142,176 +169,229 @@ class AlarmViewModel: ObservableObject {
         alarmDate = Date()
         eventInstances = []
         instanceRepeatInterval = .none
-        activeModal = .none
     }
     
+    // Improved toggleAlarmStatus function to fix state inconsistency
+    func toggleAlarmStatus(for alarm: Alarm) {
+        if let index = alarms.firstIndex(where: { $0.id == alarm.id }) {
+            // Get the current status and toggle it
+            let newStatus = !alarms[index].status
+            
+            // Update the status
+            alarms[index].status = newStatus
+            print("Toggling alarm '\(alarm.name)' to \(newStatus ? "ON" : "OFF")")
+            
+            // Handle notifications based on new status
+            if newStatus {
+                scheduleNotifications(for: alarms[index])
+            } else {
+                cancelNotifications(for: alarms[index])
+            }
+            
+            // Save the updated state immediately
+            saveAlarms()
+            
+            // Verify the save happened correctly
+            DispatchQueue.main.async {
+                self.verifyAlarmStatus(id: alarm.id, expectedStatus: newStatus)
+            }
+        }
+    }
+    
+    // Add verification to ensure UI and saved state match
+    private func verifyAlarmStatus(id: String, expectedStatus: Bool) {
+        // Load from storage and verify
+        if let data = UserDefaults.standard.data(forKey: "alarms"),
+           let decoded = try? JSONDecoder().decode([Alarm].self, from: data),
+           let savedAlarm = decoded.first(where: { $0.id == id }) {
+            
+            if savedAlarm.status != expectedStatus {
+                print("⚠️ WARNING: Alarm state mismatch! UI: \(expectedStatus), Saved: \(savedAlarm.status)")
+                
+                // Force update the UI to match saved state
+                if let index = alarms.firstIndex(where: { $0.id == id }) {
+                    DispatchQueue.main.async {
+                        self.alarms[index].status = savedAlarm.status
+                        self.objectWillChange.send()
+                    }
+                }
+            } else {
+                print("✅ Alarm state verified: \(expectedStatus)")
+            }
+        }
+    }
+    
+    // IMPROVED notification scheduling to handle multiple instances better
     func scheduleNotifications(for alarm: Alarm) {
+        // First cancel ALL existing notifications for this alarm
+        cancelNotifications(for: alarm)
+        
         guard alarm.status else {
-            print("Skipping scheduling notifications for disabled alarm: \(alarm.name)")
+            print("Alarm disabled - not scheduling: \(alarm.name)")
             return
         }
         
         print("Scheduling notifications for alarm: \(alarm.name) with ID: \(alarm.id)")
         
-        let calendar = Calendar.current
-        let now = Date()
-        
+        // Process each instance SEPARATELY
         if let instances = alarm.instances {
-            for (_, instance) in instances.enumerated() {
-                let content = UNMutableNotificationContent()
-                content.title = alarm.name
-                content.body = instance.description
+            for (index, instance) in instances.enumerated() {
+                // Create a separate, standalone notification for each instance
+                scheduleStandaloneInstance(instance: instance, index: index, alarm: alarm)
+            }
+        }
+        
+        // Check total notification count
+        checkPendingNotifications()
+    }
+
+    private func scheduleStandaloneInstance(instance: AlarmInstance, index: Int, alarm: Alarm) {
+        // Generate unique prefix for all notifications of this instance
+        let instancePrefix = "INSTANCE_\(index+1)_\(alarm.id)_"
+        
+        // Create content with instance-specific title
+        let content = UNMutableNotificationContent()
+        content.title = "\(alarm.name): \(instance.description)"
+        content.body = "Scheduled alarm for \(formatTime(instance.time))"
+        content.sound = UNNotificationSound(named: UNNotificationSoundName(rawValue: alarm.ringtone))
+        
+        // Add unique identifiers in userInfo
+        content.userInfo = [
+            "alarmId": alarm.id,
+            "instanceId": instance.id,
+            "instanceIndex": index,
+            "instanceDescription": instance.description
+        ]
+        
+        // Calculate notification time
+        let calendar = Calendar.current
+        let dateComponents = calendar.dateComponents([.year, .month, .day], from: instance.date)
+        let timeComponents = calendar.dateComponents([.hour, .minute], from: instance.time)
+        
+        // Get the exact start time
+        var exactComponents = DateComponents()
+        exactComponents.year = dateComponents.year
+        exactComponents.month = dateComponents.month
+        exactComponents.day = dateComponents.day
+        exactComponents.hour = timeComponents.hour
+        exactComponents.minute = timeComponents.minute
+        exactComponents.second = 0
+        
+        // iOS has a limit of 64 scheduled notifications per app
+        // For repeating alarms, we'll schedule a maximum of 5 future occurrences
+        let maxNotificationsPerInstance = 5
+        
+        if let startDate = calendar.date(from: exactComponents) {
+            let now = Date()
+            // Skip scheduling if the date is in the past
+            if startDate < now && instance.repeatInterval == .none {
+                print("Skipping past notification for \(instance.id) at \(startDate)")
+                return
+            }
+            
+            // Schedule based on repeat type
+            switch instance.repeatInterval {
+            case .none:
+                // Single occurrence notification
+                let trigger = UNCalendarNotificationTrigger(dateMatching: exactComponents, repeats: false)
+                let uniqueId = "\(instancePrefix)SINGLE"
+                scheduleNotification(content: content, trigger: trigger, identifier: uniqueId)
                 
-                let soundName = alarm.ringtone
-                if !alarm.isCustomRingtone, Bundle.main.path(forResource: soundName.replacingOccurrences(of: ".mp3", with: ""), ofType: "mp3") != nil {
-                    content.sound = UNNotificationSound(named: UNNotificationSoundName(rawValue: soundName))
-                    print("Setting notification sound for instance \(instance.id) to: \(soundName)")
-                } else {
-                    content.sound = .default
-                    print("Using default sound for notification (custom sounds must be bundled)")
+            case .minutely, .hourly, .daily, .weekly:
+                // Calculate the dates for the next few occurrences
+                var occurrences: [Date] = []
+                var nextDate = max(startDate, now) // Start from now or the start date, whichever is later
+                
+                for i in 0..<maxNotificationsPerInstance {
+                    occurrences.append(nextDate)
+                    
+                    // Calculate next occurrence
+                    switch instance.repeatInterval {
+                    case .minutely:
+                        nextDate = calendar.date(byAdding: .minute, value: 1, to: nextDate)!
+                    case .hourly:
+                        nextDate = calendar.date(byAdding: .hour, value: 1, to: nextDate)!
+                    case .daily:
+                        nextDate = calendar.date(byAdding: .day, value: 1, to: nextDate)!
+                    case .weekly:
+                        nextDate = calendar.date(byAdding: .weekOfYear, value: 1, to: nextDate)!
+                    default:
+                        break
+                    }
                 }
                 
-                let dateComponents = calendar.dateComponents([.year, .month, .day], from: instance.date)
-                let timeComponents = calendar.dateComponents([.hour, .minute, .second], from: instance.time)
-                
-                var combinedComponents = DateComponents()
-                combinedComponents.year = dateComponents.year
-                combinedComponents.month = dateComponents.month
-                combinedComponents.day = dateComponents.day
-                combinedComponents.hour = timeComponents.hour
-                combinedComponents.minute = timeComponents.minute
-                combinedComponents.second = timeComponents.second ?? 0
-                
-                guard let startDate = calendar.date(from: combinedComponents) else {
-                    print("Failed to create start date from components for instance \(instance.id): \(combinedComponents)")
-                    continue
-                }
-                
-                content.userInfo = ["alarmID": alarm.id, "instanceID": instance.id]
-                
-                if startDate > now {
-                    let initialTrigger = UNCalendarNotificationTrigger(dateMatching: combinedComponents, repeats: false)
-                    let initialRequest = UNNotificationRequest(
-                        identifier: "\(alarm.id)_instance_\(instance.id)_initial",
-                        content: content,
-                        trigger: initialTrigger
-                    )
+                // Schedule each occurrence
+                for (i, date) in occurrences.enumerated() {
+                    let components = calendar.dateComponents([.year, .month, .day, .hour, .minute], from: date)
+                    let trigger = UNCalendarNotificationTrigger(dateMatching: components, repeats: false)
+                    let uniqueId = "\(instancePrefix)OCC_\(i)"
                     
-                    UNUserNotificationCenter.current().add(initialRequest) { error in
-                        if let error = error {
-                            print("Error scheduling initial notification for instance \(instance.id): \(error)")
-                        } else {
-                            print("Initial notification scheduled successfully for instance \(instance.id) at \(self.formatDateTime(from: combinedComponents))")
-                        }
-                    }
-                } else {
-                    print("Initial notification for instance \(instance.id) is in the past: \(self.formatDateTime(from: combinedComponents))")
-                }
-                
-                if instance.repeatInterval != .none {
-                    let maxRepeats = 10
-                    var currentDate = startDate
-                    
-                    if startDate <= now {
-                        switch instance.repeatInterval {
-                        case .minutely:
-                            let minutesSinceStart = calendar.dateComponents([.minute], from: startDate, to: now).minute ?? 0
-                            let nextMinuteOffset = minutesSinceStart + 1
-                            currentDate = calendar.date(byAdding: .minute, value: nextMinuteOffset, to: startDate)!
-                        case .hourly:
-                            let hoursSinceStart = calendar.dateComponents([.hour], from: startDate, to: now).hour ?? 0
-                            let nextHourOffset = hoursSinceStart + 1
-                            currentDate = calendar.date(byAdding: .hour, value: nextHourOffset, to: startDate)!
-                        case .daily:
-                            let daysSinceStart = calendar.dateComponents([.day], from: startDate, to: now).day ?? 0
-                            let nextDayOffset = daysSinceStart + 1
-                            currentDate = calendar.date(byAdding: .day, value: nextDayOffset, to: startDate)!
-                        case .weekly:
-                            let weeksSinceStart = calendar.dateComponents([.weekOfYear], from: startDate, to: now).weekOfYear ?? 0
-                            let nextWeekOffset = weeksSinceStart + 1
-                            currentDate = calendar.date(byAdding: .weekOfYear, value: nextWeekOffset, to: startDate)!
-                        case .none:
-                            continue
-                        }
-                    }
-                    
-                    var repeatCounter = 0
-                    while repeatCounter < maxRepeats && currentDate > now {
-                        let repeatComponents = calendar.dateComponents([.year, .month, .day, .hour, .minute, .second], from: currentDate)
-                        let repeatTrigger = UNCalendarNotificationTrigger(dateMatching: repeatComponents, repeats: false)
-                        let repeatRequest = UNNotificationRequest(
-                            identifier: "\(alarm.id)_instance_\(instance.id)_repeat_\(repeatCounter + 1)",
-                            content: content,
-                            trigger: repeatTrigger
-                        )
-                        
-                        UNUserNotificationCenter.current().add(repeatRequest) { error in
-                            if let error = error {
-                                print("Error scheduling repeat notification \(repeatCounter + 1) for instance \(instance.id): \(error)")
-                            } else {
-                                print("Repeat notification \(repeatCounter + 1) scheduled successfully for instance \(instance.id) at \(self.formatDateTime(from: repeatComponents))")
-                            }
-                        }
-                        
-                        switch instance.repeatInterval {
-                        case .minutely:
-                            currentDate = calendar.date(byAdding: .minute, value: 1, to: currentDate)!
-                        case .hourly:
-                            currentDate = calendar.date(byAdding: .hour, value: 1, to: currentDate)!
-                        case .daily:
-                            currentDate = calendar.date(byAdding: .day, value: 1, to: currentDate)!
-                        case .weekly:
-                            currentDate = calendar.date(byAdding: .weekOfYear, value: 1, to: currentDate)!
-                        case .none:
-                            break
-                        }
-                        repeatCounter += 1
-                    }
-                    
-                    print("Scheduled \(repeatCounter) repeat notifications for instance \(instance.id)")
+                    scheduleNotification(content: content, trigger: trigger, identifier: uniqueId)
                 }
             }
         }
     }
-    
-    func formatDateTime(from components: DateComponents) -> String {
-        let calendar = Calendar.current
-        if let date = calendar.date(from: components) {
-            let formatter = DateFormatter()
-            formatter.dateFormat = "yyyy-MM-dd HH:mm:ss"
-            return formatter.string(from: date)
+
+    private func scheduleNotification(content: UNMutableNotificationContent, trigger: UNNotificationTrigger, identifier: String) {
+        let request = UNNotificationRequest(identifier: identifier, content: content, trigger: trigger)
+        
+        UNUserNotificationCenter.current().add(request) { error in
+            if let error = error {
+                print("❌ Error scheduling notification: \(identifier) - \(error.localizedDescription)")
+            } else {
+                if let calendarTrigger = trigger as? UNCalendarNotificationTrigger,
+                   let date = Calendar.current.date(from: calendarTrigger.dateComponents) {
+                    print("✅ Scheduled notification: \(identifier) at \(date)")
+                } else {
+                    print("✅ Scheduled notification: \(identifier)")
+                }
+            }
         }
-        return "Unknown Date"
+    }
+
+    private func formatTime(_ date: Date) -> String {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "h:mm a"
+        return formatter.string(from: date)
     }
     
+    // IMPROVED notification cancellation
     func cancelNotifications(for alarm: Alarm) {
-        if let instances = alarm.instances {
-            for instance in instances {
-                UNUserNotificationCenter.current().removePendingNotificationRequests(withIdentifiers: [
-                    "\(alarm.id)_instance_\(instance.id)_initial"
-                ])
-                
-                for i in 1...10 {
-                    UNUserNotificationCenter.current().removePendingNotificationRequests(withIdentifiers: [
-                        "\(alarm.id)_instance_\(instance.id)_repeat_\(i)"
-                    ])
-                }
-                
-                for i in 1...60 {
-                    UNUserNotificationCenter.current().removePendingNotificationRequests(withIdentifiers: [
-                        "\(alarm.id)_instance_\(instance.id)_repeat_\(i)",
-                        "\(alarm.id)_instance_\(instance.id)_repeating"
-                    ])
-                }
+        print("Cancelling notifications for alarm: \(alarm.id)")
+        
+        // Gather all possible notification identifiers related to this alarm
+        UNUserNotificationCenter.current().getPendingNotificationRequests { requests in
+            let alarmsRequests = requests.filter { $0.identifier.contains(alarm.id) }
+            if !alarmsRequests.isEmpty {
+                // Remove all notifications containing this alarm ID
+                let identifiers = alarmsRequests.map { $0.identifier }
+                UNUserNotificationCenter.current().removePendingNotificationRequests(withIdentifiers: identifiers)
+                print("Cancelled \(identifiers.count) notifications for alarm \(alarm.id)")
+            } else {
+                print("No notifications found for alarm \(alarm.id)")
             }
         }
-        
-        for i in 0..<alarm.dates.count {
-            UNUserNotificationCenter.current().removePendingNotificationRequests(withIdentifiers: [
-                "\(alarm.id)_\(i)",
-                "\(alarm.id)_\(i)_initial",
-                "\(alarm.id)_\(i)_repeating"
-            ])
+    }
+    
+    // Utility to check how many notifications are scheduled
+    func checkPendingNotifications() {
+        UNUserNotificationCenter.current().getPendingNotificationRequests { requests in
+            print("📱 Total pending notifications: \(requests.count)")
+            
+            // Group by alarm
+            let alarmGroups = Dictionary(grouping: requests) { request -> String in
+                let components = request.identifier.components(separatedBy: "_")
+                if components.count > 2 && components[0] == "INSTANCE" {
+                    return components[2] // The alarm ID in our new format
+                } else if let alarmId = request.identifier.components(separatedBy: "_").first {
+                    return alarmId // Old format fallback
+                }
+                return "unknown"
+            }
+            
+            for (alarmId, requests) in alarmGroups {
+                print("  🔔 Alarm \(alarmId): \(requests.count) notifications")
+            }
         }
     }
     
@@ -320,43 +400,30 @@ class AlarmViewModel: ObservableObject {
         print("Cleared all pending notifications")
     }
     
+    // UPDATED to ensure alarms are fully deleted and notifications are cancelled
     func deleteAlarm(at indexSet: IndexSet) {
         let alarmsToDelete = indexSet.map { alarms[$0] }
         
         for alarm in alarmsToDelete {
             print("Deleting alarm: \(alarm.name) with ID: \(alarm.id)")
+            
+            // Cancel all notifications for this alarm
             cancelNotifications(for: alarm)
             
+            // Double-check for any remaining notifications
             UNUserNotificationCenter.current().getPendingNotificationRequests { requests in
-                let remainingRequests = requests.filter { $0.identifier.contains(alarm.id) }
-                if !remainingRequests.isEmpty {
-                    print("Warning: \(remainingRequests.count) notifications still pending for alarm \(alarm.id) after cancellation:")
-                    for request in remainingRequests {
-                        print("- \(request.identifier)")
-                    }
-                } else {
-                    print("All notifications for alarm \(alarm.id) successfully canceled.")
+                let relatedRequests = requests.filter { $0.identifier.contains(alarm.id) }
+                if !relatedRequests.isEmpty {
+                    let identifiers = relatedRequests.map { $0.identifier }
+                    UNUserNotificationCenter.current().removePendingNotificationRequests(withIdentifiers: identifiers)
+                    print("Force removed \(identifiers.count) additional notifications for alarm \(alarm.id)")
                 }
             }
         }
         
+        // Remove alarms from the array
         alarms.remove(atOffsets: indexSet)
         saveAlarms()
-        clearAllNotifications()
-    }
-    
-    func toggleAlarmStatus(for alarm: Alarm) {
-        if let index = alarms.firstIndex(where: { $0.id == alarm.id }) {
-            alarms[index].status.toggle()
-            
-            if alarms[index].status {
-                scheduleNotifications(for: alarms[index])
-            } else {
-                cancelNotifications(for: alarms[index])
-            }
-            
-            saveAlarms()
-        }
     }
     
     func handleOpenSettings(alarm: Alarm) {
@@ -379,25 +446,35 @@ class AlarmViewModel: ObservableObject {
         guard let selectedAlarm = selectedAlarm else { return }
         
         if let index = alarms.firstIndex(where: { $0.id == selectedAlarm.id }) {
-            alarms[index] = Alarm(
-                id: alarms[index].id,
-                name: alarms[index].name,
-                description: alarms[index].description,
-                times: alarms[index].times,
-                dates: alarms[index].dates,
-                instances: alarms[index].instances,
-                status: alarms[index].status,
-                ringtone: settings.ringtone,
-                isCustomRingtone: settings.isCustomRingtone,
-                customRingtoneURL: settings.customRingtoneURL,
-                snooze: settings.snooze
-            )
+            var updatedAlarm = alarms[index]
+            updatedAlarm.ringtone = settings.ringtone
+            updatedAlarm.isCustomRingtone = settings.isCustomRingtone
+            updatedAlarm.customRingtoneURL = settings.customRingtoneURL
+            updatedAlarm.snooze = settings.snooze
+            
+            alarms[index] = updatedAlarm
             
             cancelNotifications(for: alarms[index])
             scheduleNotifications(for: alarms[index])
             
             saveAlarms()
-            closeSettings()
+        }
+    }
+    
+    func updateAlarm(_ alarm: Alarm) {
+        if let index = alarms.firstIndex(where: { $0.id == alarm.id }) {
+            // Cancel existing notifications
+            cancelNotifications(for: alarms[index])
+            
+            // Update the alarm
+            alarms[index] = alarm
+            
+            // Schedule new notifications
+            scheduleNotifications(for: alarms[index])
+            
+            // Save changes
+            saveAlarms()
+            print("Alarm updated: \(alarm.id)")
         }
     }
     
@@ -444,6 +521,8 @@ class AlarmViewModel: ObservableObject {
     
     func handleAddInstance(event: Alarm) {
         selectedEvent = event
+        // Add this line to copy existing instances:
+        eventInstances = event.instances ?? []
         alarmDate = Date()
         alarmTime = Date()
         alarmDescription = ""
@@ -453,16 +532,33 @@ class AlarmViewModel: ObservableObject {
     
     func deleteInstance(eventId: String, instanceId: String) {
         if let eventIndex = alarms.firstIndex(where: { $0.id == eventId }), var instances = alarms[eventIndex].instances {
+            // Cancel notifications for this specific instance
+            UNUserNotificationCenter.current().getPendingNotificationRequests { requests in
+                let instanceRequests = requests.filter {
+                    $0.identifier.contains(eventId) && $0.identifier.contains(instanceId)
+                }
+                
+                let identifiers = instanceRequests.map { $0.identifier }
+                UNUserNotificationCenter.current().removePendingNotificationRequests(withIdentifiers: identifiers)
+                print("Removed \(identifiers.count) notifications for instance \(instanceId)")
+            }
+            
+            // Remove instance from array
             instances.removeAll { $0.id == instanceId }
             alarms[eventIndex].instances = instances
             alarms[eventIndex].times = instances.map { $0.time }
             alarms[eventIndex].dates = instances.map { $0.date }
+            
             saveAlarms()
+            
             if let selectedEvent = selectedEvent, selectedEvent.id == eventId {
                 eventInstances = instances
             }
-            cancelNotifications(for: alarms[eventIndex])
-            scheduleNotifications(for: alarms[eventIndex])
+            
+            // Reschedule notifications for the remaining instances
+            if !instances.isEmpty {
+                scheduleNotifications(for: alarms[eventIndex])
+            }
         }
     }
 }

@@ -1,0 +1,6 @@
+platform :ios, '15.0'  # Use your deployment target
+
+target 'TimeKeeper' do
+  use_frameworks!
+  pod 'RealmSwift', '~> 10.39.1'
+end

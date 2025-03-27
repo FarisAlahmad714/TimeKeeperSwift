@@ -5,31 +5,37 @@
 //  Created by Faris Alahmad on 3/2/25.
 //
 
-// ContentView.swift
+
 import SwiftUI
 
 struct ContentView: View {
+    @State private var selectedTab = 0
+    
     var body: some View {
-        TabView {
-            AlarmSetterView() // Replace AlarmsView with AlarmSetterView
+        TabView(selection: $selectedTab) {
+            AlarmSetterView()
                 .tabItem {
-                    Label("Alarms", systemImage: "alarm")
+                    Image("alarm_icon")
+                        .renderingMode(.original)
+                    Text("Alarms")
                 }
+                .tag(0)
             
             WorldClockView()
                 .tabItem {
-                    Label("World Clock", systemImage: "globe")
+                    Image("worldclock_icon")
+                        .renderingMode(.original)
+                    Text("World Clock")
                 }
+                .tag(1)
             
-            StopwatchView()
+            CombinedTimeView()
                 .tabItem {
-                    Label("Stopwatch", systemImage: "stopwatch")
+                    Image("stopwatch_icon") // You can decide which icon to use
+                        .renderingMode(.original)
+                    Text("TimeKeeper")
                 }
-            
-            TimerView()
-                .tabItem {
-                    Label("Timer", systemImage: "timer")
-                }
+                .tag(2)
         }
         .accentColor(.red)
     }
@@ -40,5 +46,7 @@ struct ContentView_Previews: PreviewProvider {
         ContentView()
             .environmentObject(AlarmViewModel())
             .environmentObject(WorldClockViewModel())
+            .environmentObject(StopwatchViewModel())
+            .environmentObject(TimerViewModel())
     }
 }

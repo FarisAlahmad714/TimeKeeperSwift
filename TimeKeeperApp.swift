@@ -1,17 +1,31 @@
 // TimeKeeperApp.swift
+//
+//  TimeKeeperApp.swift
+//  TimeKeeper
+//
+//  TimeKeeperApp.swift
+//  TimeKeeper
+//
+//  Created by Faris Alahmad on 3/2/25.
 
 import SwiftUI
 import UserNotifications
+import FirebaseCore
+import RealmSwift // Changed from CloudKit to RealmSwift
 
 @main
-struct TimeKeeperApp: App {
+struct TimeKeeperApp: SwiftUI.App { // Explicitly use SwiftUI.App to resolve ambiguity
+    // Reference the existing AppDelegate from AppDelegate.swift
     @UIApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
-    @StateObject var alarmViewModel = AlarmViewModel()
+    
+    // Use the shared AlarmViewModel instance
+    @StateObject var alarmViewModel = AppDelegate.sharedAlarmViewModel
     @StateObject var stopwatchViewModel = StopwatchViewModel()
     @StateObject var timerViewModel = TimerViewModel()
     @StateObject var worldClockViewModel = WorldClockViewModel()
     
     init() {
+        // Keep your notification permission request
         UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound, .badge]) { granted, error in
             if granted {
                 print("Notification permission granted")
@@ -33,4 +47,4 @@ struct TimeKeeperApp: App {
                 .accentColor(.red)
         }
     }
-}	
+}
