@@ -39,6 +39,18 @@ class AlarmViewModel: ObservableObject {
     @Published var selectedAlarm: Alarm?
     @Published var showDocumentPicker: Bool = false
     
+    // New property to track active alarms
+    @Published var activeAlarm: Alarm?
+    
+    // Timer for checking active alarms periodically
+    private var alarmCheckTimer: Timer?
+    // Flag to control alarm checking
+    private var alarmChecksEnabled: Bool = true
+    
+    // NEW: Cooldown system to prevent rapid reactivation
+    private var lastDismissalTime: Date? = nil
+    private let dismissalCooldownPeriod: TimeInterval = 60 // 1 minute cooldown
+    
     let availableRingtones: [String] = [
         "default.mp3",
         "ringtone1.mp3",
@@ -54,6 +66,180 @@ class AlarmViewModel: ObservableObject {
             snooze: false
         )
         loadAlarms()
+        
+        // Set up a timer to periodically check for active alarms
+        self.alarmCheckTimer = Timer.scheduledTimer(withTimeInterval: 2.0, repeats: true) { [weak self] _ in
+            if self?.alarmChecksEnabled == true {
+                self?.checkForActiveAlarms()
+            }
+        }
+        
+        // Ensure the timer runs even when scrolling
+        if let timer = self.alarmCheckTimer {
+            RunLoop.main.add(timer, forMode: .common)
+        }
+        
+        // Listen for notification center notifications
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(handleNotificationReceived),
+            name: NSNotification.Name("AlarmNotificationReceived"),
+            object: nil
+        )
+        
+        // Add observers for temporarily disabling alarm checks
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(temporarilyDisableAlarmChecks),
+            name: NSNotification.Name("TemporarilyDisableAlarmChecks"),
+            object: nil
+        )
+        
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(resumeAlarmChecks),
+            name: NSNotification.Name("ResumeAlarmChecks"),
+            object: nil
+        )
+    }
+    
+    deinit {
+        // Clean up timer and observers
+        alarmCheckTimer?.invalidate()
+        NotificationCenter.default.removeObserver(self)
+    }
+    
+    // UPDATED: Much more aggressive alarm disabling
+    @objc private func temporarilyDisableAlarmChecks() {
+        print("🛑 FORCEFULLY DISABLING ALL ALARM SYSTEMS")
+        
+        // Set global dismissal time to enforce cooldown
+        lastDismissalTime = Date()
+        
+        // 1. Stop EVERYTHING
+        alarmChecksEnabled = false
+        
+        // 2. Kill the timer completely
+        alarmCheckTimer?.invalidate()
+        alarmCheckTimer = nil
+        
+        // 3. Force clear active alarm
+        DispatchQueue.main.async {
+            // Stop any playing sounds
+            AudioPlayerService.shared.stopAlarmSound()
+            
+            // Force nil the active alarm
+            self.activeAlarm = nil
+            
+            // Clear ALL notifications - both pending and delivered
+            UNUserNotificationCenter.current().removeAllPendingNotificationRequests()
+            UNUserNotificationCenter.current().removeAllDeliveredNotifications()
+            
+            // Force UI refresh
+            self.objectWillChange.send()
+        }
+        
+        print("⚠️ ALL ALARM SYSTEMS COMPLETELY DISABLED FOR 60 SECONDS")
+    }
+    
+    // UPDATED: Respect cooldown period
+    @objc private func resumeAlarmChecks() {
+        // Check if we're still in cooldown period
+        if let lastDismissal = lastDismissalTime,
+           Date().timeIntervalSince(lastDismissal) < dismissalCooldownPeriod {
+            print("⏱️ Not resuming alarm checks - still in cooldown period")
+            return // Don't resume during cooldown
+        }
+        
+        // Resume alarm checks normally
+        alarmChecksEnabled = true
+        
+        // Only create a new timer if one doesn't exist
+        if alarmCheckTimer == nil {
+            alarmCheckTimer = Timer.scheduledTimer(withTimeInterval: 2.0, repeats: true) { [weak self] _ in
+                self?.checkForActiveAlarms()
+            }
+            if let timer = alarmCheckTimer {
+                RunLoop.main.add(timer, forMode: .common)
+            }
+            print("⚡ Alarm checks resumed")
+        }
+    }
+    
+    @objc func handleNotificationReceived(_ notification: Notification) {
+        if let alarmID = notification.userInfo?["alarmID"] as? String,
+           let alarm = alarms.first(where: { $0.id == alarmID }) {
+            DispatchQueue.main.async {
+                self.activeAlarm = alarm
+                AudioPlayerService.shared.playAlarmSound(for: alarm)
+            }
+        }
+    }
+    
+    // UPDATED: Add cooldown check at the beginning
+    func checkForActiveAlarms() {
+        // COOLDOWN CHECK: Don't reactivate alarms too soon after dismissal
+        if let lastDismissal = lastDismissalTime,
+           Date().timeIntervalSince(lastDismissal) < dismissalCooldownPeriod {
+            print("🧊 Alarm reactivation prevented - in cooldown period")
+            return // Skip all checks during cooldown period
+        }
+        
+        if !alarmChecksEnabled {
+            return // Skip if checks are disabled
+        }
+        
+        // First check if any sound is currently playing
+        for alarm in alarms {
+            if AudioPlayerService.shared.isPlaying(alarmId: alarm.id) {
+                DispatchQueue.main.async {
+                    // If sound is playing but no active alarm is set, set it
+                    if self.activeAlarm == nil {
+                        print("Found active alarm \(alarm.name) based on audio playing")
+                        self.activeAlarm = alarm
+                    }
+                }
+                return
+            }
+        }
+        
+        // Then check notification center for any active notifications
+        UNUserNotificationCenter.current().getDeliveredNotifications { notifications in
+            let alarmNotifications = notifications.filter { notification in
+                notification.request.content.categoryIdentifier == "ALARM_CATEGORY"
+            }
+            
+            if let firstAlarmNotification = alarmNotifications.first,
+               let alarmID = firstAlarmNotification.request.content.userInfo["alarmID"] as? String,
+               let alarm = self.alarms.first(where: { $0.id == alarmID }) {
+                
+                // Found an active alarm notification
+                DispatchQueue.main.async {
+                    if !self.alarmChecksEnabled {
+                        return // Double-check in case it was disabled during async operation
+                    }
+                    
+                    print("Found active alarm \(alarm.name) from notification center")
+                    if self.activeAlarm == nil || self.activeAlarm?.id != alarm.id {
+                        self.activeAlarm = alarm
+                        AudioPlayerService.shared.playAlarmSound(for: alarm)
+                    }
+                }
+            }
+        }
+    }
+    
+    // Function to mark an alarm as inactive
+    func markAlarmAsInactive(_ alarmID: String) {
+        DispatchQueue.main.async {
+            if self.activeAlarm?.id == alarmID {
+                print("Marking alarm \(alarmID) as inactive")
+                self.activeAlarm = nil
+                
+                // Force UI refresh
+                self.objectWillChange.send()
+            }
+        }
     }
     
     func presentDocumentPicker() {
@@ -186,13 +372,18 @@ class AlarmViewModel: ObservableObject {
                 scheduleNotifications(for: alarms[index])
             } else {
                 cancelNotifications(for: alarms[index])
+                
+                // Also clear active alarm if it's being turned off
+                if activeAlarm?.id == alarm.id {
+                    activeAlarm = nil
+                }
             }
             
             // Save the updated state immediately
             saveAlarms()
             
             // Verify the save happened correctly
-            DispatchQueue.main.async {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
                 self.verifyAlarmStatus(id: alarm.id, expectedStatus: newStatus)
             }
         }
@@ -221,7 +412,7 @@ class AlarmViewModel: ObservableObject {
         }
     }
     
-    // IMPROVED notification scheduling to handle multiple instances better
+    // IMPROVED notification scheduling with persistent alerts
     func scheduleNotifications(for alarm: Alarm) {
         // First cancel ALL existing notifications for this alarm
         cancelNotifications(for: alarm)
@@ -252,13 +443,21 @@ class AlarmViewModel: ObservableObject {
         // Create content with instance-specific title
         let content = UNMutableNotificationContent()
         content.title = "\(alarm.name): \(instance.description)"
-        content.body = "Scheduled alarm for \(formatTime(instance.time))"
+        content.body = "Alarm is ringing"
         content.sound = UNNotificationSound(named: UNNotificationSoundName(rawValue: alarm.ringtone))
+        
+        // Setup for notification actions
+        content.categoryIdentifier = "ALARM_CATEGORY"
+        
+        // Set as time sensitive for higher priority
+        if #available(iOS 15.0, *) {
+            content.interruptionLevel = .timeSensitive
+        }
         
         // Add unique identifiers in userInfo
         content.userInfo = [
-            "alarmId": alarm.id,
-            "instanceId": instance.id,
+            "alarmID": alarm.id,
+            "instanceID": instance.id,
             "instanceIndex": index,
             "instanceDescription": instance.description
         ]
@@ -297,6 +496,9 @@ class AlarmViewModel: ObservableObject {
                 let uniqueId = "\(instancePrefix)SINGLE"
                 scheduleNotification(content: content, trigger: trigger, identifier: uniqueId)
                 
+                // Schedule follow-up notifications (to make it persistent)
+                scheduleFollowUpNotifications(for: alarm, instance: instance, baseTime: startDate)
+                
             case .minutely, .hourly, .daily, .weekly:
                 // Calculate the dates for the next few occurrences
                 var occurrences: [Date] = []
@@ -327,11 +529,48 @@ class AlarmViewModel: ObservableObject {
                     let uniqueId = "\(instancePrefix)OCC_\(i)"
                     
                     scheduleNotification(content: content, trigger: trigger, identifier: uniqueId)
+                    
+                    // Schedule follow-up notifications for this occurrence
+                    scheduleFollowUpNotifications(for: alarm, instance: instance, baseTime: date)
                 }
             }
         }
     }
+    
+    // Schedule follow-up notifications to ensure the alarm is persistent
+    private func scheduleFollowUpNotifications(for alarm: Alarm, instance: AlarmInstance, baseTime: Date) {
+        // Always schedule follow-ups for better persistence
+        
+        // Schedule 3 follow-up notifications at 1-minute intervals
+        for i in 1...3 {
+            let followUpContent = UNMutableNotificationContent()
+            followUpContent.title = "⏰ \(alarm.name) - Still ringing"
+            followUpContent.body = instance.description
+            followUpContent.sound = UNNotificationSound(named: UNNotificationSoundName(rawValue: alarm.ringtone))
+            followUpContent.categoryIdentifier = "ALARM_CATEGORY"
+            
+            // Add same user info for identification
+            followUpContent.userInfo = [
+                "alarmID": alarm.id,
+                "instanceID": instance.id,
+                "isFollowUp": true
+            ]
+            
+            if #available(iOS 15.0, *) {
+                followUpContent.interruptionLevel = .timeSensitive
+            }
+            
+            let followUpTime = Calendar.current.date(byAdding: .minute, value: i, to: baseTime)!
+            let dateComponents = Calendar.current.dateComponents([.year, .month, .day, .hour, .minute, .second], from: followUpTime)
+            
+            let trigger = UNCalendarNotificationTrigger(dateMatching: dateComponents, repeats: false)
+            let identifier = "\(alarm.id)_\(instance.id)_followup_\(i)"
+            
+            scheduleNotification(content: followUpContent, trigger: trigger, identifier: identifier)
+        }
+    }
 
+    // Schedule a single notification with error handling
     private func scheduleNotification(content: UNMutableNotificationContent, trigger: UNNotificationTrigger, identifier: String) {
         let request = UNNotificationRequest(identifier: identifier, content: content, trigger: trigger)
         
@@ -341,17 +580,18 @@ class AlarmViewModel: ObservableObject {
             } else {
                 if let calendarTrigger = trigger as? UNCalendarNotificationTrigger,
                    let date = Calendar.current.date(from: calendarTrigger.dateComponents) {
-                    print("✅ Scheduled notification: \(identifier) at \(date)")
+                    print("✅ Scheduled notification: \(identifier) at \(self.formatDateTime(date))")
                 } else {
                     print("✅ Scheduled notification: \(identifier)")
                 }
             }
         }
     }
-
-    private func formatTime(_ date: Date) -> String {
+    
+    // Format date/time nicely for logging
+    private func formatDateTime(_ date: Date) -> String {
         let formatter = DateFormatter()
-        formatter.dateFormat = "h:mm a"
+        formatter.dateFormat = "yyyy-MM-dd HH:mm:ss"
         return formatter.string(from: date)
     }
     
@@ -371,6 +611,18 @@ class AlarmViewModel: ObservableObject {
                 print("No notifications found for alarm \(alarm.id)")
             }
         }
+        
+        // Also remove delivered notifications for this alarm
+        UNUserNotificationCenter.current().getDeliveredNotifications { notifications in
+            let deliveredIds = notifications
+                .filter { $0.request.identifier.contains(alarm.id) }
+                .map { $0.request.identifier }
+            
+            if !deliveredIds.isEmpty {
+                UNUserNotificationCenter.current().removeDeliveredNotifications(withIdentifiers: deliveredIds)
+                print("Removed \(deliveredIds.count) delivered notifications for alarm \(alarm.id)")
+            }
+        }
     }
     
     // Utility to check how many notifications are scheduled
@@ -380,6 +632,10 @@ class AlarmViewModel: ObservableObject {
             
             // Group by alarm
             let alarmGroups = Dictionary(grouping: requests) { request -> String in
+                if let alarmID = request.content.userInfo["alarmID"] as? String {
+                    return alarmID
+                }
+                
                 let components = request.identifier.components(separatedBy: "_")
                 if components.count > 2 && components[0] == "INSTANCE" {
                     return components[2] // The alarm ID in our new format
@@ -397,7 +653,8 @@ class AlarmViewModel: ObservableObject {
     
     func clearAllNotifications() {
         UNUserNotificationCenter.current().removeAllPendingNotificationRequests()
-        print("Cleared all pending notifications")
+        UNUserNotificationCenter.current().removeAllDeliveredNotifications()
+        print("Cleared all notifications")
     }
     
     // UPDATED to ensure alarms are fully deleted and notifications are cancelled
@@ -418,6 +675,11 @@ class AlarmViewModel: ObservableObject {
                     UNUserNotificationCenter.current().removePendingNotificationRequests(withIdentifiers: identifiers)
                     print("Force removed \(identifiers.count) additional notifications for alarm \(alarm.id)")
                 }
+            }
+            
+            // Clear active alarm if it's one of the alarms being deleted
+            if activeAlarm?.id == alarm.id {
+                activeAlarm = nil
             }
         }
         
@@ -521,7 +783,7 @@ class AlarmViewModel: ObservableObject {
     
     func handleAddInstance(event: Alarm) {
         selectedEvent = event
-        // Add this line to copy existing instances:
+        // Copy existing instances to preserve them
         eventInstances = event.instances ?? []
         alarmDate = Date()
         alarmTime = Date()
