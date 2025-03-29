@@ -58,7 +58,36 @@ class AppDelegate: UIResponder, UIApplicationDelegate, UNUserNotificationCenterD
     @objc func handleSnoozeNotification(_ notification: Notification) {
         if let alarm = notification.userInfo?["alarm"] as? Alarm {
             print("Received snooze notification for alarm: \(alarm.id)")
+            AudioPlayerService.shared.stopAlarmSound() // Stop the ringtone
             handleSnoozeAction(for: alarm)
+            Self.sharedAlarmViewModel.markAlarmAsInactive(alarm.id) // Mark alarm as inactive
+            
+            // Only temporarily disable alarm checks
+            NotificationCenter.default.post(
+                name: NSNotification.Name("TemporarilyDisableAlarmChecks"),
+                object: nil
+            )
+            
+            // CRITICAL: Force resume alarm checks after 5 seconds to ensure snooze works
+            DispatchQueue.main.asyncAfter(deadline: .now() + 5) {
+                // We'll post this multiple times to ensure it goes through
+                NotificationCenter.default.post(
+                    name: NSNotification.Name("ResumeAlarmChecks"),
+                    object: nil
+                )
+                
+                // Also explicitly check for and schedule notifications
+                UNUserNotificationCenter.current().getPendingNotificationRequests { requests in
+                    print("⚠️ Checking pending notifications after snooze: \(requests.count) total")
+                    
+                    let snoozeRequests = requests.filter {
+                        ($0.content.userInfo["isSnooze"] as? Bool) ?? false
+                    }
+                    print("⚠️ Found \(snoozeRequests.count) pending snooze notifications")
+                }
+            }
+            
+            print("Alarm snoozed from UI: \(alarm.id)")
         } else {
             print("⚠️ Received snooze notification but couldn't extract alarm")
         }
@@ -215,6 +244,7 @@ class AppDelegate: UIResponder, UIApplicationDelegate, UNUserNotificationCenterD
     }
     
     // Handle notification actions (snooze, dismiss)
+    // Handle notification actions (snooze, dismiss)
     func userNotificationCenter(_ center: UNUserNotificationCenter, didReceive response: UNNotificationResponse, withCompletionHandler completionHandler: @escaping () -> Void) {
         let userInfo = response.notification.request.content.userInfo
         
@@ -238,6 +268,15 @@ class AppDelegate: UIResponder, UIApplicationDelegate, UNUserNotificationCenterD
                     AudioPlayerService.shared.stopAlarmSound()
                     handleSnoozeAction(for: alarm)
                     Self.sharedAlarmViewModel.markAlarmAsInactive(alarm.id)
+                    
+                    // ADDED: Schedule alarm checks to resume after a brief delay
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 10) {
+                        NotificationCenter.default.post(
+                            name: NSNotification.Name("ResumeAlarmChecks"),
+                            object: nil
+                        )
+                    }
+                    
                     print("Alarm snoozed: \(alarm.name)")
                     
                 case "DISMISS_ACTION":

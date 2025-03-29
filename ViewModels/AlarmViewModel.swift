@@ -110,20 +110,21 @@ class AlarmViewModel: ObservableObject {
     }
     
     // UPDATED: Much more aggressive alarm disabling
+    // In AlarmViewModel.swift - modify temporarilyDisableAlarmChecks() method
     @objc private func temporarilyDisableAlarmChecks() {
         print("🛑 FORCEFULLY DISABLING ALL ALARM SYSTEMS")
         
-        // Set global dismissal time to enforce cooldown
+        // Set global dismissal time for cooldown
         lastDismissalTime = Date()
         
-        // 1. Stop EVERYTHING
+        // Stop EVERYTHING
         alarmChecksEnabled = false
         
-        // 2. Kill the timer completely
+        // Kill the timer completely
         alarmCheckTimer?.invalidate()
         alarmCheckTimer = nil
         
-        // 3. Force clear active alarm
+        // Force clear active alarm
         DispatchQueue.main.async {
             // Stop any playing sounds
             AudioPlayerService.shared.stopAlarmSound()
@@ -131,38 +132,71 @@ class AlarmViewModel: ObservableObject {
             // Force nil the active alarm
             self.activeAlarm = nil
             
-            // Clear ALL notifications - both pending and delivered
-            UNUserNotificationCenter.current().removeAllPendingNotificationRequests()
+            // Do NOT clear pending notifications - this is what's breaking snooze
+            // We'll keep the delivered notifications though
             UNUserNotificationCenter.current().removeAllDeliveredNotifications()
             
             // Force UI refresh
             self.objectWillChange.send()
         }
         
-        print("⚠️ ALL ALARM SYSTEMS COMPLETELY DISABLED FOR 60 SECONDS")
+        print("⚠️ ALARM SYSTEMS TEMPORARILY DISABLED - WILL RESUME FOR SNOOZE")
+        
+        // Automatically resume alarm checks after a short period
+        DispatchQueue.main.asyncAfter(deadline: .now() + 5) {
+            NotificationCenter.default.post(
+                name: NSNotification.Name("ResumeAlarmChecks"),
+                object: nil
+            )
+        }
     }
     
-    // UPDATED: Respect cooldown period
     @objc private func resumeAlarmChecks() {
-        // Check if we're still in cooldown period
-        if let lastDismissal = lastDismissalTime,
-           Date().timeIntervalSince(lastDismissal) < dismissalCooldownPeriod {
-            print("⏱️ Not resuming alarm checks - still in cooldown period")
-            return // Don't resume during cooldown
-        }
-        
-        // Resume alarm checks normally
-        alarmChecksEnabled = true
-        
-        // Only create a new timer if one doesn't exist
-        if alarmCheckTimer == nil {
-            alarmCheckTimer = Timer.scheduledTimer(withTimeInterval: 2.0, repeats: true) { [weak self] _ in
-                self?.checkForActiveAlarms()
+        // Check for snooze-related notifications first
+        UNUserNotificationCenter.current().getPendingNotificationRequests { requests in
+            let snoozeRequests = requests.filter {
+                let isSnooze = ($0.content.userInfo["isSnooze"] as? Bool) ?? false
+                return isSnooze
             }
-            if let timer = alarmCheckTimer {
-                RunLoop.main.add(timer, forMode: .common)
+            
+            // IMPORTANT: If we have pending snooze notifications, ALWAYS resume checks
+            if !snoozeRequests.isEmpty {
+                print("⚠️ Pending snooze notifications found - forcing alarm checks to resume")
+                self.lastDismissalTime = nil  // Clear cooldown timer completely
+                self.alarmChecksEnabled = true
+                
+                // Recreate timer if needed
+                if self.alarmCheckTimer == nil {
+                    self.alarmCheckTimer = Timer.scheduledTimer(withTimeInterval: 2.0, repeats: true) { [weak self] _ in
+                        self?.checkForActiveAlarms()
+                    }
+                    if let timer = self.alarmCheckTimer {
+                        RunLoop.main.add(timer, forMode: .common)
+                    }
+                    print("⚡ Alarm checks forcibly resumed for snooze notifications")
+                }
+                return
             }
-            print("⚡ Alarm checks resumed")
+            
+            // Original cooldown check for non-snooze scenarios
+            if let lastDismissal = self.lastDismissalTime,
+               Date().timeIntervalSince(lastDismissal) < 10 { // 10 seconds instead of 60
+                print("⏱️ Not resuming alarm checks - still in cooldown period")
+                return
+            }
+            
+            // Resume alarm checks normally
+            self.alarmChecksEnabled = true
+            
+            if self.alarmCheckTimer == nil {
+                self.alarmCheckTimer = Timer.scheduledTimer(withTimeInterval: 2.0, repeats: true) { [weak self] _ in
+                    self?.checkForActiveAlarms()
+                }
+                if let timer = self.alarmCheckTimer {
+                    RunLoop.main.add(timer, forMode: .common)
+                }
+                print("⚡ Alarm checks resumed")
+            }
         }
     }
     
@@ -178,6 +212,21 @@ class AlarmViewModel: ObservableObject {
     
     // UPDATED: Add cooldown check at the beginning
     func checkForActiveAlarms() {
+        // Force check for snooze notifications first
+        UNUserNotificationCenter.current().getPendingNotificationRequests { requests in
+            let snoozeRequests = requests.filter {
+                ($0.content.userInfo["isSnooze"] as? Bool) ?? false
+            }
+            
+            if !snoozeRequests.isEmpty && !self.alarmChecksEnabled {
+                print("⚠️ FOUND PENDING SNOOZE NOTIFICATIONS - FORCIBLY ENABLING ALARM CHECKS")
+                self.alarmChecksEnabled = true
+                
+                // Remove any cooldown that might be active
+                self.lastDismissalTime = nil
+            }
+        }
+        
         // COOLDOWN CHECK: Don't reactivate alarms too soon after dismissal
         if let lastDismissal = lastDismissalTime,
            Date().timeIntervalSince(lastDismissal) < dismissalCooldownPeriod {
@@ -224,6 +273,35 @@ class AlarmViewModel: ObservableObject {
                         self.activeAlarm = alarm
                         AudioPlayerService.shared.playAlarmSound(for: alarm)
                     }
+                }
+            }
+        }
+        
+        // Finally, check for any pending snooze notifications that might be close to firing
+        UNUserNotificationCenter.current().getPendingNotificationRequests { requests in
+            let snoozeNotifications = requests.filter { request in
+                guard let isSnooze = request.content.userInfo["isSnooze"] as? Bool, isSnooze else {
+                    return false
+                }
+                
+                // Check if this notification is due to fire soon (within next 10 seconds)
+                if let trigger = request.trigger as? UNTimeIntervalNotificationTrigger,
+                   let fireDate = trigger.nextTriggerDate(),
+                   fireDate.timeIntervalSinceNow < 10 {
+                    return true
+                }
+                
+                return false
+            }
+            
+            // If we have imminent snooze notifications, make sure system is ready
+            if !snoozeNotifications.isEmpty {
+                print("⏰ Found \(snoozeNotifications.count) snooze notifications about to fire")
+                
+                // Ensure alarm checks are enabled
+                if !self.alarmChecksEnabled {
+                    self.alarmChecksEnabled = true
+                    print("⚠️ Forcibly enabling alarm checks for imminent snooze")
                 }
             }
         }

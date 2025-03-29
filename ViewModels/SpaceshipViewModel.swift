@@ -211,13 +211,13 @@ class SpaceshipViewModel: ObservableObject {
             ship.position.x += ship.speed * 2.0 // Increased speed for more noticeable movement
             if ship.position.x > rightEdge {
                 isMovingRight = false
-                print("Reached right edge, changing direction")
+                
             }
         } else {
             ship.position.x -= ship.speed * 2.0 // Increased speed for more noticeable movement
             if ship.position.x < leftEdge {
                 isMovingRight = true
-                print("Reached left edge, changing direction")
+                
             }
         }
         

@@ -42,13 +42,6 @@ struct AlarmsView: View {
                     // Alarm List
                     alarmListView
                 }
-                
-                // Active alarm overlay - displayed on top when alarm is active
-                if viewModel.activeAlarm != nil {
-                    AlarmActiveView(alarm: viewModel.activeAlarm!)
-                        .transition(.opacity)
-                        .zIndex(100) // Ensure it's on top
-                }
             }
             .navigationBarHidden(true)
             // Modal view handling
@@ -132,149 +125,159 @@ struct AlarmsView: View {
 // MARK: - AlarmActiveView
 struct AlarmActiveView: View {
     @EnvironmentObject var viewModel: AlarmViewModel
-    let alarm: Alarm
+    @Environment(\.scenePhase) private var scenePhase
+    @State private var backgroundEntryTime: Date?
+    @State private var pulseAnimation = false
+    @State private var shakeAnimation = false
     
-    // Add this State property to fix the 'currentTime' error
-    @State private var currentTime = Date()
-    @State private var isDismissing = false  // Track dismissal state
+    let alarm: Alarm
     
     var body: some View {
         ZStack {
-            // Full screen black background with max priority
-            Color.black.edgesIgnoringSafeArea(.all)
+            // Blurred background
+            Color.black.opacity(0.85)
+                .edgesIgnoringSafeArea(.all)
             
-            VStack(spacing: 30) {
-                Text("ALARM")
-                    .font(.system(size: 24, weight: .bold))
-                    .foregroundColor(.red)
-                
-                Text(alarm.name)
-                    .font(.system(size: 36, weight: .bold))
+            VStack(spacing: 20) {
+                // Alarm header with time
+                Text(formattedTime)
+                    .font(.system(size: 60, weight: .bold, design: .rounded))
                     .foregroundColor(.white)
-                    .multilineTextAlignment(.center)
+                
+                // Alarm name and description
+                Text(alarm.name)
+                    .font(.title)
+                    .fontWeight(.semibold)
+                    .foregroundColor(.white)
                 
                 Text(alarm.description)
-                    .font(.system(size: 20))
-                    .foregroundColor(.gray)
+                    .font(.title3)
+                    .foregroundColor(.white.opacity(0.8))
                     .multilineTextAlignment(.center)
+                    .padding(.horizontal)
                 
-                Spacer()
-                
-                // Current time display
-                Text(currentTimeString())
-                    .font(.system(size: 48, weight: .bold))
-                    .foregroundColor(.white)
-                    .onAppear {
-                        // Start timer to update time
-                        let timer = Timer.scheduledTimer(withTimeInterval: 1.0, repeats: true) { _ in
-                            self.currentTime = Date()
+                // Animation elements
+                ZStack {
+                    Circle()
+                        .fill(
+                            RadialGradient(
+                                gradient: Gradient(colors: [Color.red.opacity(0.7), Color.red.opacity(0)]),
+                                center: .center,
+                                startRadius: 50,
+                                endRadius: 150
+                            )
+                        )
+                        .frame(width: 300, height: 300)
+                        .opacity(0.8)
+                        .scaleEffect(pulseAnimation ? 1.1 : 0.9)
+                        .animation(Animation.easeInOut(duration: 1.0).repeatForever(autoreverses: true), value: pulseAnimation)
+                        .onAppear {
+                            pulseAnimation = true
                         }
-                        // Keep timer active
-                        RunLoop.main.add(timer, forMode: .common)
-                    }
-                
-                Spacer()
-                
-                Button(action: {
-                    // This is the action that runs when tapped
-                    if !isDismissing {
-                        isDismissing = true
-                        print("DISMISS BUTTON TAPPED")
-                        completelyDismissAlarm()
-                    }
-                }) {
-                    // This is just the visual appearance
-                    Text("Dismiss Alarm")
-                        .font(.headline)
+                    
+                    Image(systemName: "alarm.fill")
+                        .resizable()
+                        .aspectRatio(contentMode: .fit)
+                        .frame(width: 100, height: 100)
                         .foregroundColor(.white)
-                        .padding()
-                        .frame(maxWidth: .infinity)
-                        .background(Color.red)
-                        .cornerRadius(10)
-                        .padding(.horizontal)
+                        .rotationEffect(Angle(degrees: shakeAnimation ? 10 : -10))
+                        .animation(Animation.easeInOut(duration: 0.2).repeatForever(autoreverses: true), value: shakeAnimation)
+                        .onAppear {
+                            shakeAnimation = true
+                        }
                 }
-                .buttonStyle(DefaultButtonStyle()) // Force the default style
-                .contentShape(Rectangle()) // Ensure the entire area is tappable
-                .disabled(isDismissing)
+                .padding(.vertical, 30)
                 
-                Button(action: {
-                    if !isDismissing {
-                        isDismissing = true  // Prevent multiple taps
-                        
-                        // Snooze the alarm
-                        snoozeAlarm()
-                    }
-                }) {
-                    Text("Snooze (5 min)")
-                        .font(.headline)
-                        .foregroundColor(.white)
-                        .padding()
-                        .frame(maxWidth: .infinity)
+                // Action buttons
+                HStack(spacing: 30) {
+                    Button(action: snoozeAlarm) {
+                        VStack {
+                            Image(systemName: "bed.double.fill")
+                                .font(.system(size: 30))
+                            Text("Snooze")
+                                .font(.headline)
+                        }
+                        .frame(width: 120, height: 80)
                         .background(Color.blue)
-                        .cornerRadius(10)
-                        .padding(.horizontal)
+                        .foregroundColor(.white)
+                        .cornerRadius(15)
+                    }
+                    
+                    Button(action: dismissAlarm) {
+                        VStack {
+                            Image(systemName: "stop.fill")
+                                .font(.system(size: 30))
+                            Text("Dismiss")
+                                .font(.headline)
+                        }
+                        .frame(width: 120, height: 80)
+                        .background(Color.red)
+                        .foregroundColor(.white)
+                        .cornerRadius(15)
+                    }
                 }
-                .disabled(isDismissing)
-                .padding(.bottom, 30)
+                .padding(.top, 20)
             }
-            .padding()
+            .padding(30)
         }
-        .onAppear {
-            // Make sure sound is playing when view appears
-            AudioPlayerService.shared.playAlarmSound(for: alarm)
+        .onChange(of: scenePhase) { newPhase in
+            if newPhase == .background {
+                backgroundEntryTime = Date()
+            } else if newPhase == .active, let entryTime = backgroundEntryTime {
+                let timeInBackground = Date().timeIntervalSince(entryTime)
+                if timeInBackground > 5 {
+                    // Restart audio playback if app was in background for more than 5 seconds
+                    AudioPlayerService.shared.playAlarmSound(for: alarm)
+                }
+            }
         }
     }
     
-    // Function to get current time as a formatted string
-    private func currentTimeString() -> String {
+    private var formattedTime: String {
         let formatter = DateFormatter()
         formatter.dateFormat = "h:mm a"
-        return formatter.string(from: currentTime)
-    }
-    
-    // Complete dismissal function with all necessary steps
-    private func completelyDismissAlarm() {
-        print("DISMISS FUNCTION RUNNING")
         
-        // Stop sound
-        AudioPlayerService.shared.stopAlarmSound()
-        
-        // Post a notification for the AppDelegate to handle dismissal
-        print("Posting dismiss notification for alarm: \(alarm.id)")
-        NotificationCenter.default.post(
-            name: NSNotification.Name("DismissAlarmRequest"),
-            object: nil,
-            userInfo: ["alarm": alarm]
-        )
-        
-        // Clear active alarm to dismiss screen
-        DispatchQueue.main.async {
-            print("✅ Dismissing alarm screen")
-            viewModel.activeAlarm = nil
+        if let time = alarm.times.first {
+            return formatter.string(from: time)
         }
+        
+        let now = Date()
+        return formatter.string(from: now)
     }
     
     private func snoozeAlarm() {
-        print("SNOOZE FUNCTION RUNNING")
-        
-        // Stop sound
-        AudioPlayerService.shared.stopAlarmSound()
-        
-        // Post a notification for the AppDelegate to handle
-        print("Posting snooze notification for alarm: \(alarm.id)")
+        // Post notification to be handled by AppDelegate
         NotificationCenter.default.post(
             name: NSNotification.Name("SnoozeAlarmRequest"),
             object: nil,
             userInfo: ["alarm": alarm]
         )
         
-        // Clear active alarm to dismiss screen
-        DispatchQueue.main.async {
-            print("✅ Dismissing alarm screen after snooze")
-            viewModel.activeAlarm = nil
-        }
-    } 
+        // Play haptic feedback
+        let generator = UINotificationFeedbackGenerator()
+        generator.notificationOccurred(.success)
+        
+        // Clear active alarm
+        viewModel.activeAlarm = nil
+    }
+    
+    private func dismissAlarm() {
+        // Post notification to be handled by AppDelegate
+        NotificationCenter.default.post(
+            name: NSNotification.Name("DismissAlarmRequest"),
+            object: nil,
+            userInfo: ["alarm": alarm]
+        )
+        
+        // Play haptic feedback
+        let generator = UINotificationFeedbackGenerator()
+        generator.notificationOccurred(.warning)
+        
+        // Clear active alarm
+        viewModel.activeAlarm = nil
+    }
 }
+
 // MARK: - Supporting Views
 struct SingleAlarmRow: View {
     @EnvironmentObject var viewModel: AlarmViewModel
