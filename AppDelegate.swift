@@ -133,7 +133,7 @@ class AppDelegate: UIResponder, UIApplicationDelegate, UNUserNotificationCenterD
         // Register the category
         UNUserNotificationCenter.current().setNotificationCategories([alarmCategory])
         print("Notification categories registered successfully")
-    }	
+    }
     
     // Configure Realm database
     private func configureRealm() {

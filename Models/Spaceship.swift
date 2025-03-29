@@ -5,6 +5,13 @@
 //  Created by Faris Alahmad on 3/9/25.
 //
 
+//
+//  Spaceship.swift
+//  TimeKeeper
+//
+//  Created by Faris Alahmad on 3/9/25.
+//
+
 import SwiftUI
 
 // Base model for all spaceship types
@@ -21,7 +28,7 @@ struct Spaceship: Identifiable, Codable {
     var speed: CGFloat
     var specialEffect: SpecialEffect?
     
-    init(name: String, imageAsset: String, premium: Bool = false, adContent: AdContent? = nil, 
+    init(name: String, imageAsset: String, premium: Bool = false, adContent: AdContent? = nil,
          position: CGPoint = CGPoint(x: 100, y: 100), rotation: Double = 0, scale: CGFloat = 1.0,
          visible: Bool = true, speed: CGFloat = 1.0, specialEffect: SpecialEffect? = nil) {
         self.name = name
