@@ -70,6 +70,7 @@ extension Color {
 struct AlarmSetterView: View {
     @EnvironmentObject var viewModel: AlarmViewModel
     @StateObject private var spaceshipViewModel = SpaceshipViewModel()
+    @StateObject private var droneViewModel = DroneViewModel()
     @State private var selectedTime: Date = Date()
     @State private var isDragging = false
     @State private var showAlarmsView = false
@@ -78,11 +79,9 @@ struct AlarmSetterView: View {
     @State private var treeOffset: CGFloat = UIScreen.main.bounds.width
     @State private var humanOffset: CGFloat = UIScreen.main.bounds.width
     @State private var carOffset: CGFloat = -100
-    // Add this to AlarmSetterView struct
     @Environment(\.verticalSizeClass) var verticalSizeClass
     @Environment(\.horizontalSizeClass) var horizontalSizeClass
     @State private var previousOrientation: UIDeviceOrientation = .unknown
-    // Add this to track orientation transitions
     @State private var isTransitioningOrientation = false
     @State private var animationsEnabled = true
     
@@ -228,7 +227,12 @@ struct AlarmSetterView: View {
             isDayTime = calendar.component(.hour, from: selectedTime) >= 6 && calendar.component(.hour, from: selectedTime) < 18
         }
         
+        updateAdObjectsForTime()
+    }
+    
+    private func updateAdObjectsForTime() {
         updateSpaceshipForTime()
+        updateDroneForTime()
     }
 
     private func calculateSliderOffset(geometry: GeometryProxy) -> CGFloat {
@@ -273,6 +277,38 @@ struct AlarmSetterView: View {
         }
         
         spaceshipViewModel.activeSpaceship = ship
+    }
+    
+    // Function to update drones based on time
+    private func updateDroneForTime() {
+        guard var drone = droneViewModel.activeDrone else { return }
+        
+        drone.visible = true
+        
+        // Adjust drone properties based on time
+        if sliderProgress >= 0.2083 && sliderProgress < 0.2917 {
+            // Dawn - Faster drones
+            drone.speed = 1.2
+            drone.hoverAmplitude = 4.0
+        } else if sliderProgress >= 0.2917 && sliderProgress < 0.7083 {
+            // Day - Normal speed
+            drone.speed = 0.8
+            drone.hoverAmplitude = 2.0
+        } else if sliderProgress >= 0.7083 && sliderProgress < 0.7917 {
+            // Dusk - Medium speed
+            drone.speed = 1.0
+            drone.hoverAmplitude = 3.0
+        } else {
+            // Night - Slow drones
+            drone.speed = 0.5
+            drone.hoverAmplitude = 5.0
+        }
+        
+        if !droneViewModel.isFlying && !isTransitioningOrientation {
+            droneViewModel.startFlying()
+        }
+        
+        droneViewModel.activeDrone = drone
     }
 
     var body: some View {
@@ -345,6 +381,12 @@ struct AlarmSetterView: View {
                         }
                     }
                     
+                    // Show drone at higher altitude
+                    DroneAdView()
+                        .frame(height: 200)
+                        .position(x: geometry.size.width / 2, y: 100) // Higher position in the sky
+                        .opacity(isTransitioningOrientation ? 0 : 1)
+                    
                     ZStack {
                         if (sliderProgress >= 0.9167 && sliderProgress <= 1.0) || (sliderProgress >= 0.0 && sliderProgress < 0.2083) {
                             BedroomEnvironment()
@@ -394,8 +436,7 @@ struct AlarmSetterView: View {
                         .opacity(isTransitioningOrientation ? 0 : 1)
                     }
                     
-                    
-                    
+                    // Spaceship at original position
                     Group {
                         if let activeShip = spaceshipViewModel.activeSpaceship, activeShip.visible && !isTransitioningOrientation {
                             let shipPosition = activeShip.position
@@ -671,7 +712,7 @@ struct AlarmSetterView: View {
                                                 sunMoonOffset = progress - 0.5
                                                 isDayTime = calendar.component(.hour, from: selectedTime) >= 6 && calendar.component(.hour, from: selectedTime) < 18
                                             }
-                                            updateSpaceshipForTime()
+                                            updateAdObjectsForTime()
                                             Analytics.logEvent("slider_dragged", parameters: [
                                                 "progress": progress,
                                                 "selected_time": timeFormatter.string(from: selectedTime)
@@ -741,6 +782,7 @@ struct AlarmSetterView: View {
                 .navigationBarHidden(true)
                 .sheet(isPresented: $showAlarmsView) { AlarmsView() }
                 .onAppear {
+                    // Initialize spaceships
                     if spaceshipViewModel.availableSpaceships.isEmpty {
                         spaceshipViewModel.initializeDefaultSpaceships()
                     }
@@ -754,6 +796,20 @@ struct AlarmSetterView: View {
                         spaceshipViewModel.selectSpaceship(updatedShip)
                         spaceshipViewModel.startFlying()
                     }
+                    
+                    // Initialize drones
+                    if droneViewModel.availableDrones.isEmpty {
+                        droneViewModel.initializeDefaultDrones()
+                    }
+                    
+                    if droneViewModel.activeDrone == nil, let firstDrone = droneViewModel.availableDrones.first {
+                        var updatedDrone = firstDrone
+                        updatedDrone.position = CGPoint(x: -50, y: 100) // Higher position for drones
+                        updatedDrone.visible = true
+                        droneViewModel.selectDrone(updatedDrone)
+                        droneViewModel.startFlying()
+                    }
+                    
                     viewModel.alarmTime = selectedTime
                     
                     // Add orientation change handling
@@ -771,8 +827,9 @@ struct AlarmSetterView: View {
                             isTransitioningOrientation = true
                             animationsEnabled = false
                             
-                            // Force stop animations in the ViewModel
+                            // Force stop animations in both ViewModels
                             spaceshipViewModel.stopFlying()
+                            droneViewModel.stopFlying()
                             
                             // Reset positions without animation
                             withAnimation(.none) {
@@ -786,6 +843,12 @@ struct AlarmSetterView: View {
                                     ship.position = CGPoint(x: -50, y: 150)
                                     spaceshipViewModel.activeSpaceship = ship
                                 }
+                                
+                                // Reset drone
+                                if var drone = droneViewModel.activeDrone {
+                                    drone.position = CGPoint(x: -50, y: 100)
+                                    droneViewModel.activeDrone = drone
+                                }
                             }
                             
                             // Wait for layout to stabilize - use a longer delay for more reliability
@@ -796,11 +859,12 @@ struct AlarmSetterView: View {
                                     animationsEnabled = true
                                 }
                                 
-                                // Resume spaceship animations if portrait
+                                // Resume animations if portrait
                                 if currentOrientation.isPortrait {
                                     DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
-                                        updateSpaceshipForTime()
+                                        updateAdObjectsForTime()
                                         spaceshipViewModel.startFlying()
+                                        droneViewModel.startFlying()
                                     }
                                 }
                             }
@@ -817,13 +881,15 @@ struct AlarmSetterView: View {
                 .onDisappear {
                     // Remove the observer when view disappears
                     NotificationCenter.default.removeObserver(self, name: UIDevice.orientationDidChangeNotification, object: nil)
+                    spaceshipViewModel.stopFlying()
+                    droneViewModel.stopFlying()
                 }
             }
         }
     }
 }
 
-// MARK: - ThrusterView
+// Rest of existing view components remain the same// MARK: - ThrusterView
 struct ThrusterView: View {
     @State private var flameAnimation: Double = 0
     

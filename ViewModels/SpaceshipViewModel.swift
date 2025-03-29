@@ -61,7 +61,7 @@ class SpaceshipViewModel: ObservableObject {
         
         if var demoShip = availableSpaceships.first {
             demoShip.adContent = AdContent(
-                advertiserName: "TimeKeeper Premium",
+                advertiserName: "YOUR AD HERE!",
                 bannerImage: "premium_banner",
                 targetURL: URL(string: "https://timekeeper.app/premium"),
                 displayDuration: 15.0,
@@ -90,7 +90,7 @@ class SpaceshipViewModel: ObservableObject {
     func saveSpaceships() {
         if let encoded = try? JSONEncoder().encode(availableSpaceships) {
             UserDefaults.standard.set(encoded, forKey: "spaceships")
-            print("Saved \(availableSpaceships.count) spaceships")
+
         }
     }
     
