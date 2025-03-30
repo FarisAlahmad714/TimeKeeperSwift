@@ -1,11 +1,3 @@
-//
-//  DroneSpriteView.swift
-//  TimeKeeper
-//
-//  Created by Faris Alahmad on 3/29/25.
-//
-
-
 import SwiftUI
 import SpriteKit
 
@@ -55,7 +47,17 @@ struct DroneSpriteView: UIViewRepresentable {
         }
         
         @objc func handleTap(_ sender: UITapGestureRecognizer) {
+            // Call the existing onTap closure
             parent.onTap()
+            
+            // Trigger confetti if the tap hits the drone
+            if let view = sender.view as? SKView, let scene = view.scene as? DroneScene {
+                let location = sender.location(in: view)
+                let sceneLocation = scene.convertPoint(fromView: location)
+                if let droneNode = scene.droneNode, droneNode.contains(sceneLocation) {
+                    scene.triggerConfetti(at: droneNode.position)
+                }
+            }
         }
     }
 }

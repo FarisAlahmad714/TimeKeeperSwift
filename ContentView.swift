@@ -1,15 +1,15 @@
 //
-//  ContentView.swift
-//  TimeKeeper
-//
-//  Created by Faris Alahmad on 3/2/25.
-//
 import SwiftUI
 
-// MARK: - ContentView
 struct ContentView: View {
     @State private var selectedTab = 0
     @EnvironmentObject var alarmViewModel: AlarmViewModel
+    @Environment(\.horizontalSizeClass) var horizontalSizeClass
+    
+    // Compute if we're in landscape mode
+    private var isLandscape: Bool {
+        return horizontalSizeClass == .regular
+    }
     
     var body: some View {
         ZStack {
@@ -17,36 +17,55 @@ struct ContentView: View {
             TabView(selection: $selectedTab) {
                 AlarmSetterView()
                     .tabItem {
-                        Image("alarm_icon")
-                            .renderingMode(.original)
-                        Text("Alarms")
+                        // Custom tab item with orientation-aware sizing
+                        Label {
+                            Text("Alarms")
+                        } icon: {
+                            Image("alarm_icon")
+                                .renderingMode(.original)
+                                .resizable()
+                                .scaledToFit()
+                                .frame(width: tabIconSize, height: tabIconSize)
+                        }
                     }
                     .tag(0)
                 
                 WorldClockView()
                     .tabItem {
-                        Image("worldclock_icon")
-                            .renderingMode(.original)
-                        Text("World Clock")
+                        Label {
+                            Text("World Clock")
+                        } icon: {
+                            Image("worldclock_icon")
+                                .renderingMode(.original)
+                                .resizable()
+                                .scaledToFit()
+                                .frame(width: tabIconSize, height: tabIconSize)
+                        }
                     }
                     .tag(1)
                 
                 CombinedTimeView()
                     .tabItem {
-                        Image("stopwatch_icon")
-                            .renderingMode(.original)
-                        Text("TimeKeeper")
+                        Label {
+                            Text("TimeKeeper")
+                        } icon: {
+                            Image("stopwatch_icon")
+                                .renderingMode(.original)
+                                .resizable()
+                                .scaledToFit()
+                                .frame(width: tabIconSize, height: tabIconSize)
+                        }
                     }
                     .tag(2)
             }
             .accentColor(.red)
-            .disabled(alarmViewModel.activeAlarm != nil) // Disable interaction when alarm is active
+            .disabled(alarmViewModel.activeAlarm != nil)
             
             // Alarm overlay when active - ONLY shown at root level
             if alarmViewModel.activeAlarm != nil {
                 AlarmActiveOverlay()
                     .transition(.opacity)
-                    .zIndex(100) // Ensure it's on top
+                    .zIndex(100)
             }
         }
         .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("AlarmNotificationReceived"))) { notification in
@@ -57,6 +76,11 @@ struct ContentView: View {
                 }
             }
         }
+    }
+    
+    // Size for tab icons based on orientation
+    private var tabIconSize: CGFloat {
+        return isLandscape ? 36 : 28
     }
 }
 

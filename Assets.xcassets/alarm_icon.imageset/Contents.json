@@ -1,7 +1,7 @@
 {
   "images" : [
     {
-      "filename" : "alarm_icon.png",
+      "filename" : "alarm_icon.svg",
       "idiom" : "universal",
       "scale" : "1x"
     },

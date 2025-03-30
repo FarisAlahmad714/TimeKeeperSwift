@@ -55,7 +55,9 @@ class AlarmViewModel: ObservableObject {
         "default.mp3",
         "ringtone1.mp3",
         "ringtone2.mp3",
-        "ringtone3.mp3"
+        "ringtone3.mp3",
+        "ringtone4.mp3",
+        "ringtone5.mp3"
     ]
     
     init() {

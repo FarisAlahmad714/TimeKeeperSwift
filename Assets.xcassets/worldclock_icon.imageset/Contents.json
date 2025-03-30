@@ -1,7 +1,7 @@
 {
   "images" : [
     {
-      "filename" : "worldclock_icon.png",
+      "filename" : "worldclock_icon.svg",
       "idiom" : "universal",
       "scale" : "1x"
     },
