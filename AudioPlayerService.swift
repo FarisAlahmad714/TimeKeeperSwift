@@ -209,7 +209,7 @@ class AudioPlayerService: NSObject {
         vibrationTimer?.invalidate()
         
         // Create a pattern of vibrations
-        vibrationTimer = Timer.scheduledTimer(withTimeInterval: 2.0, repeats: true) { [weak self] _ in
+        vibrationTimer = Timer.scheduledTimer(withTimeInterval: 1.0, repeats: true) { [weak self] _ in
             let generator = UINotificationFeedbackGenerator()
             generator.notificationOccurred(.error) // Using error type for stronger vibration
             

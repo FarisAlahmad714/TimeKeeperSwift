@@ -31,11 +31,11 @@ class AlarmViewModel: ObservableObject {
     
     // Settings
     struct AlarmSettings {
-        var ringtone: String = "ringtone1.mp3"
+        var ringtone: String = "Melodic Morning.mp3"
         var snooze: Bool = true
     }
     @Published var settings = AlarmSettings()
-    let availableRingtones: [String] = ["ringtone1.mp3", "ringtone2.mp3", "ringtone3.mp3", "ringtone4.mp3", "ringtone5.mp3"]
+    let availableRingtones: [String] = ["Melodic Morning.mp3","Angels Harp.mp3", "Bell Hammer.mp3", "Galactic Ambulance.mp3", "Infinite Lasers.mp3", "Dev Special.mp3", "Jeffery's Jingle.mp3", "Matrix Call.mp3","Nuclear Awakening.mp3","Office Phone.mp3","PBJ Sandwich.mp3","Urgency.mp3"]
     
     // MARK: - Private properties
     private var checkTimer: Timer?
