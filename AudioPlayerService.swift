@@ -8,6 +8,7 @@
 import Foundation
 import AVFoundation
 import UIKit
+import AudioToolbox
 
 class AudioPlayerService: NSObject {
     // Singleton instance
@@ -18,6 +19,7 @@ class AudioPlayerService: NSObject {
     private var backupTimer: Timer?
     private var soundPlaybackTimer: Timer?
     private var backgroundTaskIdentifier: UIBackgroundTaskIdentifier = .invalid
+    private var vibrationTimer: Timer?
     
     private override init() {
         super.init()
@@ -133,6 +135,7 @@ class AudioPlayerService: NSObject {
         // Stop any current playback
         stopAlarmSound()
         
+        startVibration()
         // Start background task
         startBackgroundTask()
         
@@ -197,12 +200,29 @@ class AudioPlayerService: NSObject {
         }
     }
     
+    private func startVibration() {
+        // Stop any existing vibration timer
+        vibrationTimer?.invalidate()
+        
+        // Create a pattern of vibrations
+        vibrationTimer = Timer.scheduledTimer(withTimeInterval: 2.0, repeats: true) { [weak self] _ in
+            let generator = UINotificationFeedbackGenerator()
+            generator.notificationOccurred(.error) // Using error type for stronger vibration
+            
+            // For older devices, also use the older API
+            AudioServicesPlaySystemSound(kSystemSoundID_Vibrate)
+        }
+        RunLoop.main.add(vibrationTimer!, forMode: .common)
+    }
     func stopAlarmSound() {
         soundPlaybackTimer?.invalidate()
         soundPlaybackTimer = nil
         
         backupTimer?.invalidate()
         backupTimer = nil
+        
+           vibrationTimer?.invalidate()
+           vibrationTimer = nil
         
         if audioPlayer?.isPlaying == true {
             audioPlayer?.stop()
