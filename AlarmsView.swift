@@ -568,6 +568,33 @@ struct AlarmsView: View {
                 print("EventAlarmView appeared with alarmTime: \(viewModel.alarmTime)")
             }
         }
+        private func instanceRow(for instance: AlarmInstance) -> some View {
+            HStack {
+                VStack(alignment: .leading) {
+                    Text(formatDate(instance.date))
+                        .foregroundColor(.white)
+                    Text(formatTime(instance.time) + " - " + instance.description)
+                        .foregroundColor(.gray)
+                    Text("Repeat \(instance.repeatInterval.rawValue)")
+                        .foregroundColor(.blue)
+                        .font(.subheadline)
+                }
+                Spacer()
+                
+                // Add delete button
+                Button(action: {
+                    // Remove the instance from eventInstances array
+                    viewModel.eventInstances.removeAll { $0.id == instance.id }
+                }) {
+                    Image(systemName: "trash")
+                        .foregroundColor(.red)
+                }
+                .buttonStyle(PlainButtonStyle())
+            }
+            .padding()
+            .background(Color.gray.opacity(0.2))
+            .cornerRadius(10)
+        }
         
         private var eventDetailsSection: some View {
             VStack(spacing: 15) {
@@ -682,23 +709,7 @@ struct AlarmsView: View {
             }
         }
         
-        private func instanceRow(for instance: AlarmInstance) -> some View {
-            HStack {
-                VStack(alignment: .leading) {
-                    Text(formatDate(instance.date))
-                        .foregroundColor(.white)
-                    Text(formatTime(instance.time) + " - " + instance.description)
-                        .foregroundColor(.gray)
-                    Text("Repeat \(instance.repeatInterval.rawValue)")
-                        .foregroundColor(.blue)
-                        .font(.subheadline)
-                }
-                Spacer()
-            }
-            .padding()
-            .background(Color.gray.opacity(0.2))
-            .cornerRadius(10)
-        }
+        	
         
         private var buttonSection: some View {
             HStack(spacing: 20) {
