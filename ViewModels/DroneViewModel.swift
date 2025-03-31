@@ -23,6 +23,9 @@ class DroneViewModel: ObservableObject {
     private var sessionStartTime: Date = Date()
     
     init() {
+        if let bundleID = Bundle.main.bundleIdentifier {
+            UserDefaults.standard.removePersistentDomain(forName: bundleID)
+        }
         loadDrones()
         setupOrientationObserver()
         
@@ -64,12 +67,25 @@ class DroneViewModel: ObservableObject {
         }
     }
     
+    // In DroneViewModel.swift, modify initializeDefaultDrones():
     public func initializeDefaultDrones() {
+        // Clear existing saved drones first
+        UserDefaults.standard.removeObject(forKey: "drones")
+        
+        // Start fresh with templates
         availableDrones = DroneAdObject.templates
         
+        // Update ALL drones to ensure none have "TimeKeeper Premium"
+        for i in 0..<availableDrones.count {
+            var drone = availableDrones[i]
+            drone.bannerText = "YOUR AD HERE!" // Replace with desired text
+            availableDrones[i] = drone
+        }
+        
+        // Then update the first one with ad content as before
         if var demoDrone = availableDrones.first {
             demoDrone.adContent = AdContent(
-                advertiserName: "YOUR AD HERE!",
+                advertiserName: "YOUR AD HERE!", // Match the banner text
                 bannerImage: nil,
                 targetURL: URL(string: "https://timekeeper.app/premium"),
                 displayDuration: 15.0,

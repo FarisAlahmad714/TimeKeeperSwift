@@ -383,6 +383,9 @@ class DroneScene: SKScene, SKPhysicsContactDelegate {
         
         self.addChild(adLabelContainer)
         self.adLabelNode = adLabelContainer
+        print("Setting up ad label with text: \(text)")
+        print("DroneObject bannerText: \(String(describing: droneObject?.bannerText))")
+        print("DroneObject adContent name: \(String(describing: droneObject?.adContent?.advertiserName))")
     }
     
     private func updateAdLabel() {

@@ -5,13 +5,11 @@ import UserNotifications
 // Define ModalState enum
 enum ModalState: String {
     case none
-    case choice
-    case singleAlarm
     case eventAlarm
     case settings
-    case editSingleAlarm
     case addInstance
     case editInstance
+    // Removed: singleAlarm and editSingleAlarm
 }
 
 // Define AlarmSettings struct
@@ -112,7 +110,6 @@ class AlarmViewModel: ObservableObject {
     }
     
     // UPDATED: Much more aggressive alarm disabling
-    // In AlarmViewModel.swift - modify temporarilyDisableAlarmChecks() method
     @objc private func temporarilyDisableAlarmChecks() {
         print("🛑 FORCEFULLY DISABLING ALL ALARM SYSTEMS")
         
@@ -154,6 +151,7 @@ class AlarmViewModel: ObservableObject {
     }
     
     @objc private func resumeAlarmChecks() {
+        // No changes needed here
         // Check for snooze-related notifications first
         UNUserNotificationCenter.current().getPendingNotificationRequests { requests in
             let snoozeRequests = requests.filter {
@@ -203,6 +201,7 @@ class AlarmViewModel: ObservableObject {
     }
     
     @objc func handleNotificationReceived(_ notification: Notification) {
+        // No changes needed here
         if let alarmID = notification.userInfo?["alarmID"] as? String,
            let alarm = alarms.first(where: { $0.id == alarmID }) {
             DispatchQueue.main.async {
@@ -212,8 +211,8 @@ class AlarmViewModel: ObservableObject {
         }
     }
     
-    // UPDATED: Add cooldown check at the beginning
     func checkForActiveAlarms() {
+        // No changes needed here
         // Force check for snooze notifications first
         UNUserNotificationCenter.current().getPendingNotificationRequests { requests in
             let snoozeRequests = requests.filter {
@@ -311,6 +310,7 @@ class AlarmViewModel: ObservableObject {
     
     // Function to mark an alarm as inactive
     func markAlarmAsInactive(_ alarmID: String) {
+        // No changes needed here
         DispatchQueue.main.async {
             if self.activeAlarm?.id == alarmID {
                 print("Marking alarm \(alarmID) as inactive")
@@ -323,10 +323,12 @@ class AlarmViewModel: ObservableObject {
     }
     
     func presentDocumentPicker() {
+        // No changes needed here
         // Implementation for document picker
     }
     
     func handleSelectedAudioFile(url: URL) {
+        // No changes needed here
         guard url.startAccessingSecurityScopedResource() else {
             print("Failed to access security-scoped resource")
             return
@@ -353,9 +355,25 @@ class AlarmViewModel: ObservableObject {
         showDocumentPicker = false
     }
     
+    // UPDATED: Convert single alarms to event alarms when loading
     func loadAlarms() {
         if let data = UserDefaults.standard.data(forKey: "alarms") {
-            if let decoded = try? JSONDecoder().decode([Alarm].self, from: data) {
+            if var decoded = try? JSONDecoder().decode([Alarm].self, from: data) {
+                // Convert any single alarms to event alarms
+                for i in 0..<decoded.count {
+                    if decoded[i].instances == nil || decoded[i].instances!.isEmpty {
+                        // This is a single alarm - convert it to event alarm
+                        let newInstance = AlarmInstance(
+                            id: UUID().uuidString,
+                            date: decoded[i].dates.first ?? Date(),
+                            time: decoded[i].times.first ?? Date(),
+                            description: decoded[i].description,
+                            repeatInterval: .none
+                        )
+                        decoded[i].instances = [newInstance]
+                    }
+                }
+                
                 self.alarms = decoded
                 print("Alarms loaded: \(decoded.count)")
                 
@@ -365,6 +383,9 @@ class AlarmViewModel: ObservableObject {
                         self.scheduleNotifications(for: alarm)
                     }
                 }
+                
+                // Save back the converted alarms
+                saveAlarms()
                 return
             }
         }
@@ -372,56 +393,33 @@ class AlarmViewModel: ObservableObject {
     }
     
     func saveAlarms() {
+        // No changes needed here
         if let encoded = try? JSONEncoder().encode(alarms) {
             UserDefaults.standard.set(encoded, forKey: "alarms")
             print("Alarms saved: \(alarms.count)")
         }
     }
     
+    // UPDATED: Removed single alarm path, only event alarms are created
     func addAlarm() {
         let newId = UUID().uuidString
         
-        if activeModal == .singleAlarm {
-            let singleInstance = AlarmInstance(
-                id: UUID().uuidString,
-                date: alarmDate,
-                time: alarmTime,
-                description: alarmDescription,
-                repeatInterval: instanceRepeatInterval
-            )
-            
-            let newAlarm = Alarm(
-                id: newId,
-                name: alarmName,
-                description: alarmDescription,
-                times: [alarmTime],
-                dates: [alarmDate],
-                instances: [singleInstance],
-                status: true,
-                ringtone: settings.ringtone,
-                isCustomRingtone: settings.isCustomRingtone,
-                customRingtoneURL: settings.customRingtoneURL,
-                snooze: settings.snooze
-            )
-            
-            alarms.append(newAlarm)
-        } else if activeModal == .eventAlarm {
-            let newAlarm = Alarm(
-                id: newId,
-                name: alarmName,
-                description: alarmDescription,
-                times: eventInstances.map { instance in instance.time },
-                dates: eventInstances.map { instance in instance.date },
-                instances: eventInstances,
-                status: true,
-                ringtone: settings.ringtone,
-                isCustomRingtone: settings.isCustomRingtone,
-                customRingtoneURL: settings.customRingtoneURL,
-                snooze: settings.snooze
-            )
-            
-            alarms.append(newAlarm)
-        }
+        // Only create event alarms
+        let newAlarm = Alarm(
+            id: newId,
+            name: alarmName,
+            description: alarmDescription,
+            times: eventInstances.map { instance in instance.time },
+            dates: eventInstances.map { instance in instance.date },
+            instances: eventInstances,
+            status: true,
+            ringtone: settings.ringtone,
+            isCustomRingtone: settings.isCustomRingtone,
+            customRingtoneURL: settings.customRingtoneURL,
+            snooze: settings.snooze
+        )
+        
+        alarms.append(newAlarm)
         
         saveAlarms()
         scheduleNotifications(for: alarms.last!)
@@ -429,6 +427,7 @@ class AlarmViewModel: ObservableObject {
     }
     
     func resetFields() {
+        // No changes needed here
         alarmName = ""
         alarmDescription = ""
         alarmTime = Date()
@@ -437,8 +436,8 @@ class AlarmViewModel: ObservableObject {
         instanceRepeatInterval = .none
     }
     
-    // Improved toggleAlarmStatus function to fix state inconsistency
     func toggleAlarmStatus(for alarm: Alarm) {
+        // No changes needed here
         if let index = alarms.firstIndex(where: { $0.id == alarm.id }) {
             // Get the current status and toggle it
             let newStatus = !alarms[index].status
@@ -469,8 +468,8 @@ class AlarmViewModel: ObservableObject {
         }
     }
     
-    // Add verification to ensure UI and saved state match
     private func verifyAlarmStatus(id: String, expectedStatus: Bool) {
+        // No changes needed here
         // Load from storage and verify
         if let data = UserDefaults.standard.data(forKey: "alarms"),
            let decoded = try? JSONDecoder().decode([Alarm].self, from: data),
@@ -492,8 +491,8 @@ class AlarmViewModel: ObservableObject {
         }
     }
     
-    // IMPROVED notification scheduling with persistent alerts
     func scheduleNotifications(for alarm: Alarm) {
+        // No changes needed here
         // First cancel ALL existing notifications for this alarm
         cancelNotifications(for: alarm)
         
@@ -517,6 +516,7 @@ class AlarmViewModel: ObservableObject {
     }
 
     private func scheduleStandaloneInstance(instance: AlarmInstance, index: Int, alarm: Alarm) {
+        // No changes needed here
         // Generate unique prefix for all notifications of this instance
         let instancePrefix = "INSTANCE_\(index+1)_\(alarm.id)_"
         
@@ -617,8 +617,8 @@ class AlarmViewModel: ObservableObject {
         }
     }
     
-    // Schedule follow-up notifications to ensure the alarm is persistent
     private func scheduleFollowUpNotifications(for alarm: Alarm, instance: AlarmInstance, baseTime: Date) {
+        // No changes needed here
         // Always schedule follow-ups for better persistence
         
         // Schedule 3 follow-up notifications at 1-minute intervals
@@ -650,8 +650,8 @@ class AlarmViewModel: ObservableObject {
         }
     }
 
-    // Schedule a single notification with error handling
     private func scheduleNotification(content: UNMutableNotificationContent, trigger: UNNotificationTrigger, identifier: String) {
+        // No changes needed here
         let request = UNNotificationRequest(identifier: identifier, content: content, trigger: trigger)
         
         UNUserNotificationCenter.current().add(request) { error in
@@ -668,15 +668,15 @@ class AlarmViewModel: ObservableObject {
         }
     }
     
-    // Format date/time nicely for logging
     private func formatDateTime(_ date: Date) -> String {
+        // No changes needed here
         let formatter = DateFormatter()
         formatter.dateFormat = "yyyy-MM-dd HH:mm:ss"
         return formatter.string(from: date)
     }
     
-    // IMPROVED notification cancellation
     func cancelNotifications(for alarm: Alarm) {
+        // No changes needed here
         print("Cancelling notifications for alarm: \(alarm.id)")
         
         // Gather all possible notification identifiers related to this alarm
@@ -705,8 +705,8 @@ class AlarmViewModel: ObservableObject {
         }
     }
     
-    // Utility to check how many notifications are scheduled
     func checkPendingNotifications() {
+        // No changes needed here
         UNUserNotificationCenter.current().getPendingNotificationRequests { requests in
             print("📱 Total pending notifications: \(requests.count)")
             
@@ -732,13 +732,14 @@ class AlarmViewModel: ObservableObject {
     }
     
     func clearAllNotifications() {
+        // No changes needed here
         UNUserNotificationCenter.current().removeAllPendingNotificationRequests()
         UNUserNotificationCenter.current().removeAllDeliveredNotifications()
         print("Cleared all notifications")
     }
     
-    // UPDATED to ensure alarms are fully deleted and notifications are cancelled
     func deleteAlarm(at indexSet: IndexSet) {
+        // No changes needed here
         let alarmsToDelete = indexSet.map { alarms[$0] }
         
         for alarm in alarmsToDelete {
@@ -769,6 +770,7 @@ class AlarmViewModel: ObservableObject {
     }
     
     func handleOpenSettings(alarm: Alarm) {
+        // No changes needed here
         selectedAlarm = alarm
         settings = AlarmSettings(
             ringtone: alarm.ringtone,
@@ -780,11 +782,13 @@ class AlarmViewModel: ObservableObject {
     }
     
     func closeSettings() {
+        // No changes needed here
         selectedAlarm = nil
         activeModal = .none
     }
     
     func updateAlarmSettings() {
+        // No changes needed here
         guard let selectedAlarm = selectedAlarm else { return }
         
         if let index = alarms.firstIndex(where: { $0.id == selectedAlarm.id }) {
@@ -804,6 +808,7 @@ class AlarmViewModel: ObservableObject {
     }
     
     func updateAlarm(_ alarm: Alarm) {
+        // No changes needed here
         if let index = alarms.firstIndex(where: { $0.id == alarm.id }) {
             // Cancel existing notifications
             cancelNotifications(for: alarms[index])
@@ -821,6 +826,7 @@ class AlarmViewModel: ObservableObject {
     }
     
     func addEventInstance() {
+        // No changes needed here
         let newInstance = AlarmInstance(
             id: UUID().uuidString,
             date: alarmDate,
@@ -833,25 +839,41 @@ class AlarmViewModel: ObservableObject {
         instanceRepeatInterval = .none
     }
     
+    // UPDATED: Modify to convert single alarms to event alarms
     func handleEditSingleAlarm(alarm: Alarm) {
-        selectedAlarm = alarm
+        // Convert to event alarm editing flow
+        selectedEvent = alarm
         alarmName = alarm.name
         alarmDescription = alarm.description
-        alarmTime = alarm.times.first ?? Date()
-        alarmDate = alarm.dates.first ?? Date()
-        if let instance = alarm.instances?.first {
-            instanceRepeatInterval = instance.repeatInterval
+        
+        // Convert existing instances or create a new instance if needed
+        if let instances = alarm.instances, !instances.isEmpty {
+            eventInstances = instances
+        } else {
+            // Create a new instance from the first time/date
+            let newInstance = AlarmInstance(
+                id: UUID().uuidString,
+                date: alarm.dates.first ?? Date(),
+                time: alarm.times.first ?? Date(),
+                description: alarm.description,
+                repeatInterval: .none
+            )
+            eventInstances = [newInstance]
         }
+        
         settings = AlarmSettings(
             ringtone: alarm.ringtone,
             isCustomRingtone: alarm.isCustomRingtone,
             customRingtoneURL: alarm.customRingtoneURL,
             snooze: alarm.snooze
         )
-        activeModal = .editSingleAlarm
+        
+        // Use eventAlarm modal instead of editSingleAlarm
+        activeModal = .eventAlarm
     }
     
     func handleEditInstance(event: Alarm, instance: AlarmInstance) {
+        // No changes needed here
         selectedEvent = event
         selectedInstance = instance
         alarmDate = instance.date
@@ -862,6 +884,7 @@ class AlarmViewModel: ObservableObject {
     }
     
     func handleAddInstance(event: Alarm) {
+        // No changes needed here
         selectedEvent = event
         // Copy existing instances to preserve them
         eventInstances = event.instances ?? []
@@ -873,6 +896,7 @@ class AlarmViewModel: ObservableObject {
     }
     
     func deleteInstance(eventId: String, instanceId: String) {
+        // No changes needed here
         if let eventIndex = alarms.firstIndex(where: { $0.id == eventId }), var instances = alarms[eventIndex].instances {
             // Cancel notifications for this specific instance
             UNUserNotificationCenter.current().getPendingNotificationRequests { requests in

@@ -38,7 +38,7 @@ struct Alarm: Identifiable, Codable, Equatable {
     }
     
     var isEventAlarm: Bool {
-        return instances != nil && !instances!.isEmpty // Changed to check for non-empty
+        return true  // Changed to check for non-empty
     }
     
     enum CodingKeys: String, CodingKey {

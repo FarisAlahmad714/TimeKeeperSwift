@@ -14,7 +14,8 @@ class SpaceshipViewModel: ObservableObject {
     @Published var interactionCount = 0
     @Published var lastInteractionTime: Date? = nil
     @Published var isMovingRight = true // Track movement direction
-    
+    @Published var forceRefreshTrigger: UUID = UUID()
+
     private var orientationCancellable: AnyCancellable?
     private var flightTimer: Timer?
     private var animationTimer: Timer?
@@ -24,6 +25,9 @@ class SpaceshipViewModel: ObservableObject {
     private var spaceshipViewTime: [UUID: TimeInterval] = [:]
     
     init() {
+        // Clear any previously stored data to start fresh
+        UserDefaults.standard.removeObject(forKey: "spaceships")
+        
         loadSpaceships()
         checkPremiumStatus()
         setupOrientationObserver()
@@ -35,6 +39,9 @@ class SpaceshipViewModel: ObservableObject {
             if self.activeSpaceship == nil, !self.availableSpaceships.isEmpty {
                 self.selectSpaceship(self.availableSpaceships[0])
             }
+            
+            // Use the more comprehensive fix method
+            self.fixSpaceshipText(newText: "Your New Text Here")
         }
     }
     
@@ -42,6 +49,108 @@ class SpaceshipViewModel: ObservableObject {
         flightTimer?.invalidate()
         animationTimer?.invalidate()
         orientationCancellable?.cancel()
+    }
+    
+    // MARK: - Comprehensive text fix method
+    
+    func fixSpaceshipText(newText: String) {
+        print("🔄 Starting comprehensive text fix for: \(newText)")
+        
+        // Save current active ship reference
+        guard let originalShip = activeSpaceship else { return }
+        
+        // Step 1: Force UI refresh by completely clearing the active ship
+        DispatchQueue.main.async {
+            // Temporarily remove active ship
+            self.activeSpaceship = nil
+            
+            // Step 2: Create completely new AdContent with new text
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                // Create a brand new ship instance
+                var newShip = originalShip
+                
+                // Create completely new ad content with fresh ID
+                let newAdContent = AdContent(
+                    id: UUID(), // New ID forces SwiftUI to see this as new
+                    advertiserName: newText,
+                    bannerImage: originalShip.adContent?.bannerImage,
+                    targetURL: originalShip.adContent?.targetURL,
+                    displayDuration: originalShip.adContent?.displayDuration ?? 15.0,
+                    priority: originalShip.adContent?.priority ?? 10,
+                    impressionCount: 0, // Reset counters for new instance
+                    clickCount: 0,
+                    startDate: Date(),
+                    endDate: Date().addingTimeInterval(60*60*24*365)
+                )
+                
+                // Set the new content
+                newShip.adContent = newAdContent
+                
+                // Update existing ships list
+                for i in 0..<self.availableSpaceships.count {
+                    if self.availableSpaceships[i].id == originalShip.id {
+                        self.availableSpaceships[i] = newShip
+                    }
+                }
+                
+                // Set the active ship to our new ship
+                self.activeSpaceship = newShip
+                print("Created new ship with new text: \(newText)")
+                
+                // Step 3: Force SwiftUI to completely rebuild the view
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                    self.forceRefreshTrigger = UUID()
+                    print("Triggered view refresh")
+                }
+                
+                // Step 4: Save changes
+                self.saveSpaceships()
+            }
+        }
+    }
+    
+    // MARK: - Alternate refresh method (less comprehensive)
+    
+    func forceRefreshSpaceshipText(newText: String) {
+        print("Attempting to force refresh spaceship text to: \(newText)")
+        
+        // Step 1: Update all spaceship ad content
+        for i in 0..<availableSpaceships.count {
+            if availableSpaceships[i].adContent != nil {
+                var updatedShip = availableSpaceships[i]
+                var updatedAdContent = updatedShip.adContent!
+                updatedAdContent.advertiserName = newText
+                // Create a fresh ID to force SwiftUI to see this as a new object
+                updatedAdContent.id = UUID()
+                updatedShip.adContent = updatedAdContent
+                availableSpaceships[i] = updatedShip
+                print("Updated spaceship: \(updatedShip.name) with new text: \(newText)")
+            }
+        }
+        
+        // Step 2: Force UI refresh by creating a completely new activeSpaceship object
+        if let currentShip = activeSpaceship {
+            var newShip = currentShip
+            if var adContent = newShip.adContent {
+                adContent.advertiserName = newText
+                // Create a fresh UUID to guarantee SwiftUI sees this as a new object
+                adContent.id = UUID()
+                newShip.adContent = adContent
+                print("Updated active spaceship with new text: \(newText)")
+            }
+            
+            // Force view update by temporarily setting to nil then to new value
+            self.activeSpaceship = nil
+            
+            // Delay slightly to ensure view updates
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                self.activeSpaceship = newShip
+                print("Reset active spaceship to force UI refresh")
+            }
+        }
+        
+        // Step 3: Save the updated model
+        saveSpaceships()
     }
     
     // MARK: - Setup Methods
@@ -61,7 +170,7 @@ class SpaceshipViewModel: ObservableObject {
         
         if var demoShip = availableSpaceships.first {
             demoShip.adContent = AdContent(
-                advertiserName: "YOUR AD HERE!",
+                advertiserName: "Your New Text Here",
                 bannerImage: "premium_banner",
                 targetURL: URL(string: "https://timekeeper.app/premium"),
                 displayDuration: 15.0,
@@ -90,7 +199,6 @@ class SpaceshipViewModel: ObservableObject {
     func saveSpaceships() {
         if let encoded = try? JSONEncoder().encode(availableSpaceships) {
             UserDefaults.standard.set(encoded, forKey: "spaceships")
-
         }
     }
     
@@ -211,13 +319,11 @@ class SpaceshipViewModel: ObservableObject {
             ship.position.x += ship.speed * 2.0 // Increased speed for more noticeable movement
             if ship.position.x > rightEdge {
                 isMovingRight = false
-                
             }
         } else {
             ship.position.x -= ship.speed * 2.0 // Increased speed for more noticeable movement
             if ship.position.x < leftEdge {
                 isMovingRight = true
-                
             }
         }
         
@@ -225,7 +331,6 @@ class SpaceshipViewModel: ObservableObject {
         ship.position.y = fixedY
         
         // Important: Don't rotate the ship - we'll handle direction via scale effect in the view
-        // ship.rotation = isMovingRight ? 0 : 180  <-- Removing this line
         ship.rotation = 0 // Keep consistent rotation
         
         activeSpaceship = ship

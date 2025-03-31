@@ -498,10 +498,11 @@ struct AlarmSetterView: View {
                         if let activeShip = spaceshipViewModel.activeSpaceship, activeShip.visible && !isTransitioningOrientation {
                             let shipPosition = activeShip.position
                             
-                            Text("TimeKeeper...")
+                            Text("YOUR AD HERE!...")
                                 .foregroundColor(.white)
                                 .font(.caption).bold()
-                                .padding(5)
+                                .padding(10)
+                                .frame(width: 150, height: 30)
                                 .background(Color.black.opacity(0.7))
                                 .cornerRadius(5)
                                 .overlay(
@@ -735,10 +736,15 @@ struct AlarmSetterView: View {
                     HStack(spacing: 40) {
                         Button(action: {
                             if !isTransitioningOrientation {
+                                // Just set the time and open the form
                                 viewModel.alarmTime = selectedTime
+                                viewModel.alarmDate = selectedTime
+                                viewModel.eventInstances = [] // Empty array - no instances created yet
+                                
                                 showAlarmsView = true
                                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
-                                    viewModel.activeModal = .choice
+                                    // Go directly to event alarm creation
+                                    viewModel.activeModal = .eventAlarm
                                 }
                                 Analytics.logEvent("set_alarm_tapped", parameters: [
                                     "selected_time": timeFormatter.string(from: selectedTime)

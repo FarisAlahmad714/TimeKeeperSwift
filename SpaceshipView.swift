@@ -53,6 +53,7 @@ import SwiftUI
                         .offset(y: -60)
                 }
             }
+            .id(viewModel.forceRefreshTrigger) 
             .onAppear {
                 // Start subtle animation
                 withAnimation(Animation.easeInOut(duration: 1.5).repeatForever(autoreverses: true)) {
@@ -202,45 +203,47 @@ import SwiftUI
     }
 
     // Ad banner for spaceships
-    struct AdBannerView: View {
-        let adContent: AdContent
-        
-        var body: some View {
-            ZStack {
-                RoundedRectangle(cornerRadius: 8)
-                    .fill(Color.black.opacity(0.7))
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 8)
-                            .stroke(Color.white.opacity(0.6), lineWidth: 1)
-                    )
-                
-                HStack(spacing: 6) {
-                    if let bannerImage = adContent.bannerImage, UIImage(named: bannerImage) != nil {
-                        Image(bannerImage)
-                            .resizable()
-                            .aspectRatio(contentMode: .fit)
-                            .frame(width: 30, height: 30)
-                    } else {
-                        // Fallback to system image
-                        Image(systemName: "star.fill")
-                            .foregroundColor(.yellow)
-                            .frame(width: 30, height: 30)
-                    }
-                    
-                    Text(adContent.advertiserName)
-                        .font(.caption)
-                        .foregroundColor(.white)
-                        .lineLimit(1)
-                    
-                    Image(systemName: "arrow.up.forward.app")
-                        .font(.caption)
-                        .foregroundColor(.blue)
+struct AdBannerView: View {
+    let adContent: AdContent
+    @EnvironmentObject var viewModel: SpaceshipViewModel
+    
+    var body: some View {
+        ZStack {
+            RoundedRectangle(cornerRadius: 8)
+                .fill(Color.black.opacity(0.7))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 8)
+                        .stroke(Color.white.opacity(0.6), lineWidth: 1)
+                )
+            
+            HStack(spacing: 6) {
+                if let bannerImage = adContent.bannerImage, UIImage(named: bannerImage) != nil {
+                    Image(bannerImage)
+                        .resizable()
+                        .aspectRatio(contentMode: .fit)
+                        .frame(width: 30, height: 30)
+                } else {
+                    // Fallback to system image
+                    Image(systemName: "star.fill")
+                        .foregroundColor(.yellow)
+                        .frame(width: 30, height: 30)
                 }
-                .padding(.horizontal, 6)
+                
+                // Use a constant string instead of adContent.advertiserName
+                Text("Your New Text Here")
+                    .font(.caption)
+                    .foregroundColor(.white)
+                    .lineLimit(1)
+                
+                Image(systemName: "arrow.up.forward.app")
+                    .font(.caption)
+                    .foregroundColor(.blue)
             }
+            .padding(.horizontal, 6)
         }
+        .id(viewModel.forceRefreshTrigger) // Force refresh when trigger changes
     }
-
+}
 
 
     // Special effect components for premium ships
