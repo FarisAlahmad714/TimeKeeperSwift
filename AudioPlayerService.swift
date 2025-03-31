@@ -92,10 +92,14 @@ class AudioPlayerService: NSObject {
             // Start sound playback without stopping first
             if audioPlayer?.isPlaying == false {
                 playSingleSound(for: alarm)
+                
+                // Also restart vibration if not already running
+                if vibrationTimer == nil || !vibrationTimer!.isValid {
+                    startVibration()
+                }
             }
         }
     }
-    
     // New method to play the sound once
     private func playSingleSound(for alarm: Alarm) {
         // Get the sound file

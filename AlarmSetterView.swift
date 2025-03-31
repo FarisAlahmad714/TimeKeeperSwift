@@ -761,7 +761,7 @@ struct AlarmSetterView: View {
                                     .foregroundColor(.white)
                             }
                         }
-                        .disabled(isTransitioningOrientation)
+                        .disabled(isTransitioningOrientation)	
                         
                         Button(action: {
                             if !isTransitioningOrientation {

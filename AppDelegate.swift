@@ -3,6 +3,7 @@ import UserNotifications
 import AVFoundation
 import FirebaseCore
 import RealmSwift
+import AudioToolbox
 
 class AppDelegate: UIResponder, UIApplicationDelegate, UNUserNotificationCenterDelegate {
     var audioPlayer: AVAudioPlayer?
@@ -56,64 +57,123 @@ class AppDelegate: UIResponder, UIApplicationDelegate, UNUserNotificationCenterD
     
     // Handle snooze notification from UI
     @objc func handleSnoozeNotification(_ notification: Notification) {
+        // First try to get the alarm object directly
         if let alarm = notification.userInfo?["alarm"] as? Alarm {
-            print("Received snooze notification for alarm: \(alarm.id)")
-            AudioPlayerService.shared.stopAlarmSound() // Stop the ringtone
-            handleSnoozeAction(for: alarm)
-            Self.sharedAlarmViewModel.markAlarmAsInactive(alarm.id) // Mark alarm as inactive
-            
-            // Only temporarily disable alarm checks
-            NotificationCenter.default.post(
-                name: NSNotification.Name("TemporarilyDisableAlarmChecks"),
-                object: nil
-            )
-            
-            // CRITICAL: Force resume alarm checks after 5 seconds to ensure snooze works
-            DispatchQueue.main.asyncAfter(deadline: .now() + 5) {
-                // We'll post this multiple times to ensure it goes through
-                NotificationCenter.default.post(
-                    name: NSNotification.Name("ResumeAlarmChecks"),
-                    object: nil
-                )
-                
-                // Also explicitly check for and schedule notifications
-                UNUserNotificationCenter.current().getPendingNotificationRequests { requests in
-                    print("⚠️ Checking pending notifications after snooze: \(requests.count) total")
-                    
-                    let snoozeRequests = requests.filter {
-                        ($0.content.userInfo["isSnooze"] as? Bool) ?? false
-                    }
-                    print("⚠️ Found \(snoozeRequests.count) pending snooze notifications")
-                }
-            }
-            
-            print("Alarm snoozed from UI: \(alarm.id)")
-        } else {
-            print("⚠️ Received snooze notification but couldn't extract alarm")
+            print("✅ Received snooze notification with full alarm object")
+            handleSnoozeWithAlarm(alarm, notification: notification)
+        }
+        // Fall back to looking up by ID
+        else if let alarmID = notification.userInfo?["alarmID"] as? String,
+                let alarm = Self.sharedAlarmViewModel.alarms.first(where: { $0.id == alarmID }) {
+            print("⚠️ Received snooze notification with ID only: \(alarmID)")
+            handleSnoozeWithAlarm(alarm, notification: notification)
+        }
+        else {
+            print("❌ CRITICAL ERROR: Received snooze notification but couldn't extract alarm information")
+            // Try to stop all audio anyway
+            AudioPlayerService.shared.stopAlarmSound()
+            // Force remove all notifications as emergency measure
+            UNUserNotificationCenter.current().removeAllDeliveredNotifications()
         }
     }
     
-    // Handle dismiss notification from UI
-    @objc func handleDismissNotification(_ notification: Notification) {
-        if let alarm = notification.userInfo?["alarm"] as? Alarm {
-            print("Received dismiss notification for alarm: \(alarm.id)")
-            
-            // Cancel all notifications for this alarm
-            cancelRemainingNotifications(for: alarm.id)
-            
-            // Ensure the alarm is marked as inactive
-            Self.sharedAlarmViewModel.markAlarmAsInactive(alarm.id)
-            
-            // Post notification to disable alarm checks temporarily (prevents reactivation)
+    private func handleSnoozeWithAlarm(_ alarm: Alarm, notification: Notification) {
+        print("Received snooze notification for alarm: \(alarm.id)")
+        AudioPlayerService.shared.stopAlarmSound() // Stop the ringtone
+        
+        // Extract instanceID if present
+        let instanceID = notification.userInfo?["instanceID"] as? String
+        
+        // Handle the snooze
+        handleSnoozeAction(for: alarm, instanceID: instanceID)
+        
+        // Temporarily disable alarm checks
+        NotificationCenter.default.post(
+            name: NSNotification.Name("TemporarilyDisableAlarmChecks"),
+            object: nil
+        )
+        
+        // Force resume alarm checks after delay
+        DispatchQueue.main.asyncAfter(deadline: .now() + 5) {
             NotificationCenter.default.post(
-                name: NSNotification.Name("TemporarilyDisableAlarmChecks"),
+                name: NSNotification.Name("ResumeAlarmChecks"),
                 object: nil
             )
-            
-            print("Alarm completely dismissed: \(alarm.id)")
-        } else {
-            print("⚠️ Received dismiss notification but couldn't extract alarm")
         }
+        
+        print("Alarm snoozed: \(alarm.id)")
+    }
+    
+    // Similarly update handleDismissNotification
+    @objc func handleDismissNotification(_ notification: Notification) {
+        // First try to get the alarm object directly
+        if let alarm = notification.userInfo?["alarm"] as? Alarm {
+            print("✅ Received dismiss notification with full alarm object")
+            handleDismissWithAlarm(alarm, notification: notification)
+        }
+        // Fall back to looking up by ID
+        else if let alarmID = notification.userInfo?["alarmID"] as? String,
+                let alarm = Self.sharedAlarmViewModel.alarms.first(where: { $0.id == alarmID }) {
+            print("⚠️ Received dismiss notification with ID only: \(alarmID)")
+            handleDismissWithAlarm(alarm, notification: notification)
+        }
+        else {
+            print("❌ CRITICAL ERROR: Received dismiss notification but couldn't extract alarm information")
+            // Try to stop all audio anyway
+            AudioPlayerService.shared.stopAlarmSound()
+            // Force cancel all notifications as a last resort
+            UNUserNotificationCenter.current().removeAllDeliveredNotifications()
+            UNUserNotificationCenter.current().removeAllPendingNotificationRequests()
+        }
+    }
+    
+    private func handleDismissWithAlarm(_ alarm: Alarm, notification: Notification) {
+        print("Received dismiss notification for alarm: \(alarm.id)")
+        AudioPlayerService.shared.stopAlarmSound() // Stop the ringtone
+        
+        // Extract instanceID if present
+        let instanceID = notification.userInfo?["instanceID"] as? String
+        
+        // Cancel notifications
+        if let instanceID = instanceID {
+            cancelRemainingNotifications(for: alarm.id, instanceID: instanceID)
+            Self.sharedAlarmViewModel.markInstanceAsInactive(alarmID: alarm.id, instanceID: instanceID)
+        } else {
+            cancelRemainingNotifications(for: alarm.id)
+            Self.sharedAlarmViewModel.markAlarmAsInactive(alarm.id)
+        }
+        
+        // Post notification to disable alarm checks
+        NotificationCenter.default.post(
+            name: NSNotification.Name("TemporarilyDisableAlarmChecks"),
+            object: nil
+        )
+        
+        print("Alarm dismissed: \(alarm.id)")
+    }
+    
+    // Add this emergency reset method to AppDelegate
+    @objc func emergencyResetAllAlarms() {
+        print("⚠️⚠️⚠️ EMERGENCY RESET ACTIVATED ⚠️⚠️⚠️")
+        
+        // Stop all audio
+        AudioPlayerService.shared.stopAlarmSound()
+        
+        // Clear active alarm state
+        Self.sharedAlarmViewModel.activeAlarm = nil
+        Self.sharedAlarmViewModel.activeInstance = nil
+        
+        // Remove all notifications
+        UNUserNotificationCenter.current().removeAllPendingNotificationRequests()
+        UNUserNotificationCenter.current().removeAllDeliveredNotifications()
+        
+        // Resume normal operation
+        NotificationCenter.default.post(
+            name: NSNotification.Name("ResumeAlarmChecks"),
+            object: nil
+        )
+        
+        print("All alarms have been reset")
     }
     
     // Setup audio session for alarm sounds to play in background
@@ -218,18 +278,48 @@ class AppDelegate: UIResponder, UIApplicationDelegate, UNUserNotificationCenterD
                 // Start playing alarm sound using AudioPlayerService
                 AudioPlayerService.shared.playAlarmSound(for: alarm)
                 
+                // FIXED: Extract instance ID with fallback to notification identifier
+                var instanceID = userInfo["instanceID"] as? String
+                print("DEBUG - Notification received with userInfo: \(userInfo)")
+                print("DEBUG - Notification identifier: \(notification.request.identifier)")
+                
+                // If instanceID is nil or doesn't match any instance, try to extract from identifier
+                if instanceID == nil || (alarm.instances != nil && !alarm.instances!.contains(where: { $0.id == instanceID })) {
+                    // Parse from identifier format: "alarm_[alarmID]_instance_[instanceID]_time_..."
+                    let components = notification.request.identifier.components(separatedBy: "_")
+                    if components.count >= 4 && components.firstIndex(of: "instance") != nil {
+                        let instanceIndex = components.firstIndex(of: "instance")! + 1
+                        if instanceIndex < components.count {
+                            instanceID = components[instanceIndex]
+                            print("DEBUG - Extracted instanceID from notification identifier: \(instanceID!)")
+                        }
+                    }
+                }
+                
+                // Prepare notification userInfo
+                var notificationUserInfo: [String: Any] = ["alarmID": alarmID]
+                if let instanceID = instanceID {
+                    notificationUserInfo["instanceID"] = instanceID
+                }
+                
                 // Notify view model about active alarm
                 DispatchQueue.main.async {
                     // Post notification to trigger active alarm view
                     NotificationCenter.default.post(
                         name: NSNotification.Name("AlarmNotificationReceived"),
                         object: nil,
-                        userInfo: ["alarmID": alarmID]
+                        userInfo: notificationUserInfo
                     )
                     
                     // Set active alarm directly too
                     if Self.sharedAlarmViewModel.activeAlarm == nil {
                         Self.sharedAlarmViewModel.activeAlarm = alarm
+                        // If we have an instance ID, also set the active instance
+                        if let instanceID = instanceID,
+                           let instance = alarm.instances?.first(where: { $0.id == instanceID }) {
+                            Self.sharedAlarmViewModel.activeInstance = instance
+                            print("DEBUG - Set active instance: \(instance.id) with description: \(instance.description)")
+                        }
                     }
                 }
                 
@@ -244,18 +334,42 @@ class AppDelegate: UIResponder, UIApplicationDelegate, UNUserNotificationCenterD
     }
     
     // Handle notification actions (snooze, dismiss)
-    // Handle notification actions (snooze, dismiss)
     func userNotificationCenter(_ center: UNUserNotificationCenter, didReceive response: UNNotificationResponse, withCompletionHandler completionHandler: @escaping () -> Void) {
         let userInfo = response.notification.request.content.userInfo
         
-        // Extract alarm ID
+        // Extract alarm ID and instance ID if present
         if let alarmID = userInfo["alarmID"] as? String {
+            // FIXED: Extract instance ID with fallback to notification identifier
+            var instanceID = userInfo["instanceID"] as? String
+            print("DEBUG - Notification response with userInfo: \(userInfo)")
+            print("DEBUG - Notification identifier: \(response.notification.request.identifier)")
+            
             // Find the alarm
             if let alarm = Self.sharedAlarmViewModel.alarms.first(where: { $0.id == alarmID }) {
+                // If instanceID is nil or doesn't match any instance, try to extract from identifier
+                if instanceID == nil || (alarm.instances != nil && !alarm.instances!.contains(where: { $0.id == instanceID })) {
+                    // Parse from identifier format: "alarm_[alarmID]_instance_[instanceID]_time_..."
+                    let components = response.notification.request.identifier.components(separatedBy: "_")
+                    if components.count >= 4 && components.firstIndex(of: "instance") != nil {
+                        let instanceIndex = components.firstIndex(of: "instance")! + 1
+                        if instanceIndex < components.count {
+                            instanceID = components[instanceIndex]
+                            print("DEBUG - Extracted instanceID from notification identifier: \(instanceID!)")
+                        }
+                    }
+                }
+                
                 // Set active alarm here too - this helps when notification is tapped
                 if response.actionIdentifier == UNNotificationDefaultActionIdentifier {
                     DispatchQueue.main.async {
                         Self.sharedAlarmViewModel.activeAlarm = alarm
+                        
+                        // If we have an instance ID, also set the active instance
+                        if let instanceID = instanceID,
+                           let instance = alarm.instances?.first(where: { $0.id == instanceID }) {
+                            Self.sharedAlarmViewModel.activeInstance = instance
+                            print("DEBUG - Set active instance: \(instance.id) with description: \(instance.description)")
+                        }
                         
                         // Restart sound playback
                         AudioPlayerService.shared.playAlarmSound(for: alarm)
@@ -266,7 +380,7 @@ class AppDelegate: UIResponder, UIApplicationDelegate, UNUserNotificationCenterD
                 case "SNOOZE_ACTION":
                     // Stop the current sound and schedule snooze
                     AudioPlayerService.shared.stopAlarmSound()
-                    handleSnoozeAction(for: alarm)
+                    handleSnoozeAction(for: alarm, instanceID: instanceID)
                     Self.sharedAlarmViewModel.markAlarmAsInactive(alarm.id)
                     
                     // ADDED: Schedule alarm checks to resume after a brief delay
@@ -288,10 +402,21 @@ class AppDelegate: UIResponder, UIApplicationDelegate, UNUserNotificationCenterD
                     content.title = "Alarm Still Active"
                     content.body = "Open app to fully dismiss \(alarm.name)"
                     content.categoryIdentifier = "ALARM_CATEGORY"
-                    content.userInfo = ["alarmID": alarm.id]
+                    
+                    // Include instance ID in userInfo if present
+                    var reminderUserInfo: [String: Any] = ["alarmID": alarm.id]
+                    if let instanceID = instanceID {
+                        reminderUserInfo["instanceID"] = instanceID
+                    }
+                    content.userInfo = reminderUserInfo
+                    
+                    // Create reminder notification identifier
+                    let reminderID = instanceID != nil ?
+                    "\(alarm.id)_instance_\(instanceID!)_reminder_\(Date().timeIntervalSince1970)" :
+                    "\(alarm.id)_reminder_\(Date().timeIntervalSince1970)"
                     
                     let request = UNNotificationRequest(
-                        identifier: "\(alarm.id)_reminder",
+                        identifier: reminderID,
                         content: content,
                         trigger: nil  // Deliver immediately
                     )
@@ -321,21 +446,31 @@ class AppDelegate: UIResponder, UIApplicationDelegate, UNUserNotificationCenterD
     }
     
     // Handle snooze action - made public so it can be called from AlarmActiveView
-    public func handleSnoozeAction(for alarm: Alarm) {
+    public func handleSnoozeAction(for alarm: Alarm, instanceID: String? = nil) {
         // Snooze for 5 minutes
         let snoozeDate = Date().addingTimeInterval(5 * 60)
         
         // Create a new snooze notification with higher priority
         let content = UNMutableNotificationContent()
         content.title = "Snoozed: \(alarm.name)"
-        content.body = alarm.description
+        
+        // FIXED: Use instance description if available
+        if let instanceID = instanceID,
+           let instance = alarm.instances?.first(where: { $0.id == instanceID }) {
+            content.body = instance.description.isEmpty ? alarm.description : instance.description
+        } else {
+            content.body = alarm.description
+        }
+        
         content.sound = UNNotificationSound(named: UNNotificationSoundName(rawValue: alarm.ringtone))
         content.categoryIdentifier = "ALARM_CATEGORY"
-        content.userInfo = ["alarmID": alarm.id, "isSnooze": true]
         
-        if #available(iOS 15.0, *) {
-            content.interruptionLevel = .timeSensitive
+        // Include instanceID in userInfo if provided
+        var userInfo: [String: Any] = ["alarmID": alarm.id, "isSnooze": true]
+        if let instanceID = instanceID {
+            userInfo["instanceID"] = instanceID
         }
+        content.userInfo = userInfo
         
         // Schedule for exactly 5 minutes later
         let calendar = Calendar.current
@@ -346,14 +481,23 @@ class AppDelegate: UIResponder, UIApplicationDelegate, UNUserNotificationCenterD
             repeats: false
         )
         
+        // Create notification identifier that includes instanceID if present
+        let notificationID = instanceID != nil ?
+        "\(alarm.id)_instance_\(instanceID!)_snooze_\(Date().timeIntervalSince1970)" :
+        "\(alarm.id)_snooze_\(Date().timeIntervalSince1970)"
+        
         let request = UNNotificationRequest(
-            identifier: "\(alarm.id)_snooze_\(Date().timeIntervalSince1970)",
+            identifier: notificationID,
             content: content,
             trigger: trigger
         )
         
-        // Clear existing notifications first
-        cancelRemainingNotifications(for: alarm.id)
+        // Cancel only notifications relevant to this instance/current alarm
+        if let instanceID = instanceID {
+            cancelRemainingNotifications(for: alarm.id, instanceID: instanceID)
+        } else {
+            cancelRemainingNotifications(for: alarm.id, onlyCurrentAlarm: true)
+        }
         
         // Add the snooze notification
         UNUserNotificationCenter.current().add(request) { error in
@@ -364,26 +508,38 @@ class AppDelegate: UIResponder, UIApplicationDelegate, UNUserNotificationCenterD
             }
         }
         
-        // Schedule additional follow-up notifications (for persistence) - just like the regular alarm
-        scheduleSnoozeFollowUps(for: alarm, baseTime: snoozeDate)
+        // Schedule additional follow-up notifications (for persistence)
+        scheduleSnoozeFollowUps(for: alarm, baseTime: snoozeDate, instanceID: instanceID)
     }
-
+    
     // New method to schedule persistent follow-up notifications for snooze
-    private func scheduleSnoozeFollowUps(for alarm: Alarm, baseTime: Date) {
+    private func scheduleSnoozeFollowUps(for alarm: Alarm, baseTime: Date, instanceID: String? = nil) {
         // Schedule 3 follow-up notifications at 1-minute intervals
         for i in 1...3 {
             let followUpContent = UNMutableNotificationContent()
             followUpContent.title = "⏰ \(alarm.name) - Snoozed Alarm Still Active"
-            followUpContent.body = alarm.description
+            
+            // FIXED: Use instance description if available
+            if let instanceID = instanceID,
+               let instance = alarm.instances?.first(where: { $0.id == instanceID }) {
+                followUpContent.body = instance.description.isEmpty ? alarm.description : instance.description
+            } else {
+                followUpContent.body = alarm.description
+            }
+            
             followUpContent.sound = UNNotificationSound(named: UNNotificationSoundName(rawValue: alarm.ringtone))
             followUpContent.categoryIdentifier = "ALARM_CATEGORY"
             
-            // Add same user info for identification
-            followUpContent.userInfo = [
+            // Include instanceID in userInfo if provided
+            var userInfo: [String: Any] = [
                 "alarmID": alarm.id,
                 "isSnooze": true,
                 "isFollowUp": true
             ]
+            if let instanceID = instanceID {
+                userInfo["instanceID"] = instanceID
+            }
+            followUpContent.userInfo = userInfo
             
             if #available(iOS 15.0, *) {
                 followUpContent.interruptionLevel = .timeSensitive
@@ -393,7 +549,11 @@ class AppDelegate: UIResponder, UIApplicationDelegate, UNUserNotificationCenterD
             let dateComponents = Calendar.current.dateComponents([.year, .month, .day, .hour, .minute, .second], from: followUpTime)
             
             let trigger = UNCalendarNotificationTrigger(dateMatching: dateComponents, repeats: false)
-            let identifier = "\(alarm.id)_snooze_followup_\(i)"
+            
+            // Create identifier that includes instanceID if present
+            let identifier = instanceID != nil ?
+            "\(alarm.id)_instance_\(instanceID!)_snooze_followup_\(i)" :
+            "\(alarm.id)_snooze_followup_\(i)"
             
             let request = UNNotificationRequest(identifier: identifier, content: followUpContent, trigger: trigger)
             
@@ -409,10 +569,24 @@ class AppDelegate: UIResponder, UIApplicationDelegate, UNUserNotificationCenterD
         // Also add a backup notification in case all else fails
         let backupContent = UNMutableNotificationContent()
         backupContent.title = "⚠️ Snoozed Alarm Backup: \(alarm.name)"
-        backupContent.body = alarm.description
+        
+        // FIXED: Use instance description if available
+        if let instanceID = instanceID,
+           let instance = alarm.instances?.first(where: { $0.id == instanceID }) {
+            backupContent.body = instance.description.isEmpty ? alarm.description : instance.description
+        } else {
+            backupContent.body = alarm.description
+        }
+        
         backupContent.sound = UNNotificationSound(named: UNNotificationSoundName(rawValue: alarm.ringtone))
         backupContent.categoryIdentifier = "ALARM_CATEGORY"
-        backupContent.userInfo = ["alarmID": alarm.id, "isSnooze": true, "isBackup": true]
+        
+        // Include instanceID in userInfo if provided
+        var backupUserInfo: [String: Any] = ["alarmID": alarm.id, "isSnooze": true, "isBackup": true]
+        if let instanceID = instanceID {
+            backupUserInfo["instanceID"] = instanceID
+        }
+        backupContent.userInfo = backupUserInfo
         
         if #available(iOS 15.0, *) {
             backupContent.interruptionLevel = .timeSensitive
@@ -423,8 +597,13 @@ class AppDelegate: UIResponder, UIApplicationDelegate, UNUserNotificationCenterD
             repeats: false
         )
         
+        // Create identifier that includes instanceID if present
+        let backupID = instanceID != nil ?
+        "\(alarm.id)_instance_\(instanceID!)_snooze_ultimate_backup" :
+        "\(alarm.id)_snooze_ultimate_backup"
+        
         let backupRequest = UNNotificationRequest(
-            identifier: "\(alarm.id)_snooze_ultimate_backup",
+            identifier: backupID,
             content: backupContent,
             trigger: backupTrigger
         )
@@ -438,21 +617,76 @@ class AppDelegate: UIResponder, UIApplicationDelegate, UNUserNotificationCenterD
         }
     }
     
-    // Cancel all notifications for a specific alarm
-    public func cancelRemainingNotifications(for alarmID: String) {
+    // Cancel notifications for a specific alarm
+    public func cancelRemainingNotifications(for alarmID: String, onlyCurrentAlarm: Bool = false, instanceID: String? = nil) {
+        print("CANCELLING NOTIFICATIONS FOR ALARM: \(alarmID), instance: \(instanceID ?? "all")")
+        
+        // First cancel pending notifications
         UNUserNotificationCenter.current().getPendingNotificationRequests { requests in
             let identifiersToRemove = requests
-                .filter { $0.identifier.contains(alarmID) }
+                .filter { request in
+                    let userInfo = request.content.userInfo
+                    
+                    // Check userInfo first for more reliable filtering
+                    if let requestAlarmID = userInfo["alarmID"] as? String {
+                        if requestAlarmID == alarmID {
+                            if let specificInstanceID = instanceID {
+                                return (userInfo["instanceID"] as? String) == specificInstanceID
+                            } else if onlyCurrentAlarm {
+                                return (userInfo["instanceID"] as? String) == nil
+                            } else {
+                                return true
+                            }
+                        }
+                        return false
+                    }
+                    
+                    // Fallback to checking the identifier if userInfo doesn't have alarmID
+                    if let specificInstanceID = instanceID {
+                        return request.identifier.contains(alarmID) && request.identifier.contains(specificInstanceID)
+                    } else if onlyCurrentAlarm {
+                        return request.identifier.contains(alarmID) && !request.identifier.contains("_instance_")
+                    } else {
+                        return request.identifier.contains(alarmID)
+                    }
+                }
                 .map { $0.identifier }
             
             UNUserNotificationCenter.current().removePendingNotificationRequests(withIdentifiers: identifiersToRemove)
-            print("Cancelled \(identifiersToRemove.count) notifications for alarm \(alarmID)")
+            print("Cancelled \(identifiersToRemove.count) pending notifications for alarm \(alarmID)")
         }
         
-        // Also clear delivered notifications
+        // Then cancel delivered notifications with the same approach
         UNUserNotificationCenter.current().getDeliveredNotifications { notifications in
             let identifiersToRemove = notifications
-                .filter { $0.request.identifier.contains(alarmID) }
+                .filter { notification in
+                    let userInfo = notification.request.content.userInfo
+                    
+                    // Check userInfo first
+                    if let requestAlarmID = userInfo["alarmID"] as? String {
+                        if requestAlarmID == alarmID {
+                            if let specificInstanceID = instanceID {
+                                return (userInfo["instanceID"] as? String) == specificInstanceID
+                            } else if onlyCurrentAlarm {
+                                return (userInfo["instanceID"] as? String) == nil
+                            } else {
+                                return true
+                            }
+                        }
+                        return false
+                    }
+                    
+                    // Fallback to identifier
+                    if let specificInstanceID = instanceID {
+                        return notification.request.identifier.contains(alarmID) &&
+                        notification.request.identifier.contains(specificInstanceID)
+                    } else if onlyCurrentAlarm {
+                        return notification.request.identifier.contains(alarmID) &&
+                        !notification.request.identifier.contains("_instance_")
+                    } else {
+                        return notification.request.identifier.contains(alarmID)
+                    }
+                }
                 .map { $0.request.identifier }
             
             UNUserNotificationCenter.current().removeDeliveredNotifications(withIdentifiers: identifiersToRemove)

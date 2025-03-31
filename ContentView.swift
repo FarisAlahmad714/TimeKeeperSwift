@@ -117,13 +117,13 @@ struct AlarmActiveView: View {
                     .font(.system(size: 60, weight: .bold, design: .rounded))
                     .foregroundColor(.white)
                 
-                // Alarm name and description
-                Text(alarm.name)
+                // Alarm name and description - FIXED
+                Text(instanceTitle)
                     .font(.title)
                     .fontWeight(.semibold)
                     .foregroundColor(.white)
                 
-                Text(alarm.description)
+                Text(instanceDescription)
                     .font(.title3)
                     .foregroundColor(.white.opacity(0.8))
                     .multilineTextAlignment(.center)
@@ -206,9 +206,28 @@ struct AlarmActiveView: View {
         }
     }
     
+    // ADDED: New computed properties for consistent display
+    private var instanceTitle: String {
+        // Always show the alarm name as the title
+        return alarm.name
+    }
+    
+    private var instanceDescription: String {
+        // If we have an active instance, use its description
+        if let instance = viewModel.activeInstance {
+            return instance.description
+        }
+        return alarm.description
+    }
+    
     private var formattedTime: String {
         let formatter = DateFormatter()
         formatter.dateFormat = "h:mm a"
+        
+        // For event alarms with active instance, get the time from that instance
+        if let activeInstance = viewModel.activeInstance {
+            return formatter.string(from: activeInstance.time)
+        }
         
         // For event alarms, get the time from the appropriate instance
         if let instances = alarm.instances, !instances.isEmpty {
@@ -225,34 +244,62 @@ struct AlarmActiveView: View {
     }
     
     private func snoozeAlarm() {
+        // Create userInfo dictionary with both alarm object and ID
+        var userInfo: [String: Any] = ["alarm": alarm, "alarmID": alarm.id]
+        
+        // Add instanceID if available
+        if let instance = viewModel.activeInstance {
+            userInfo["instanceID"] = instance.id
+        }
+        
+        // Stop audio immediately - THIS IS CRITICAL
+        AudioPlayerService.shared.stopAlarmSound()
+        
         // Post notification to be handled by AppDelegate
         NotificationCenter.default.post(
             name: NSNotification.Name("SnoozeAlarmRequest"),
             object: nil,
-            userInfo: ["alarm": alarm]
+            userInfo: userInfo
         )
         
         // Play haptic feedback
         let generator = UINotificationFeedbackGenerator()
         generator.notificationOccurred(.success)
         
-        // Clear active alarm
+        // Clear active alarm and instance
         viewModel.activeAlarm = nil
+        viewModel.activeInstance = nil
+        
+        print("Snooze request sent with alarm ID: \(alarm.id)")
     }
     
     private func dismissAlarm() {
+        // Create userInfo dictionary with both alarm object and ID
+        var userInfo: [String: Any] = ["alarm": alarm, "alarmID": alarm.id]
+        
+        // Add instanceID if available
+        if let instance = viewModel.activeInstance {
+            userInfo["instanceID"] = instance.id
+        }
+        
+        // Stop audio immediately - THIS IS CRITICAL
+        AudioPlayerService.shared.stopAlarmSound()
+        
         // Post notification to be handled by AppDelegate
         NotificationCenter.default.post(
             name: NSNotification.Name("DismissAlarmRequest"),
             object: nil,
-            userInfo: ["alarm": alarm]
+            userInfo: userInfo
         )
         
         // Play haptic feedback
         let generator = UINotificationFeedbackGenerator()
         generator.notificationOccurred(.warning)
         
-        // Clear active alarm
+        // Clear active alarm and instance
         viewModel.activeAlarm = nil
+        viewModel.activeInstance = nil
+        
+        print("Dismiss request sent with alarm ID: \(alarm.id)")
     }
 }
