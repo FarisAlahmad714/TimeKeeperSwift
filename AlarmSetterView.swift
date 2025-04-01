@@ -84,6 +84,7 @@ struct AlarmSetterView: View {
     @State private var previousOrientation: UIDeviceOrientation = .unknown
     @State private var isTransitioningOrientation = false
     @State private var animationsEnabled = true
+    @State private var showLanguageSettings = false
     
     private let timeFormatter: DateFormatter = {
         let formatter = DateFormatter()
@@ -386,6 +387,7 @@ struct AlarmSetterView: View {
                         .frame(height: 200)
                         .position(x: geometry.size.width / 2, y: 100) // Higher position in the sky
                         .opacity(isTransitioningOrientation ? 0 : 1)
+                        .environmentObject(droneViewModel) 
                     
                     ZStack {
                         if (sliderProgress >= 0.9167 && sliderProgress <= 1.0) || (sliderProgress >= 0.0 && sliderProgress < 0.2083) {
@@ -498,7 +500,8 @@ struct AlarmSetterView: View {
                         if let activeShip = spaceshipViewModel.activeSpaceship, activeShip.visible && !isTransitioningOrientation {
                             let shipPosition = activeShip.position
                             
-                            Text("YOUR AD HERE!...")
+                            Text("ad_banner".localized)
+
                                 .foregroundColor(.white)
                                 .font(.caption).bold()
                                 .padding(10)
@@ -733,7 +736,8 @@ struct AlarmSetterView: View {
                     .opacity(isTransitioningOrientation ? 0.5 : 1)
                     .disabled(isTransitioningOrientation)
                     
-                    HStack(spacing: 40) {
+                    // MODIFIED: Changed from HStack(spacing: 40) to HStack(spacing: 25) to fit 3 buttons
+                    HStack(spacing: 25) {
                         Button(action: {
                             if !isTransitioningOrientation {
                                 // Just set the time and open the form
@@ -761,7 +765,7 @@ struct AlarmSetterView: View {
                                     .foregroundColor(.white)
                             }
                         }
-                        .disabled(isTransitioningOrientation)	
+                        .disabled(isTransitioningOrientation)
                         
                         Button(action: {
                             if !isTransitioningOrientation {
@@ -774,7 +778,26 @@ struct AlarmSetterView: View {
                                     .resizable()
                                     .frame(width: 30, height: 30)
                                     .foregroundColor(.white)
-                                Text("Alarms")
+                                Text("alarms".localized)
+
+                                    .font(.system(size: 12))
+                                    .foregroundColor(.white)
+                            }
+                        }
+                        .disabled(isTransitioningOrientation)
+                        
+                        // NEW: Language Settings Button
+                        Button(action: {
+                            if !isTransitioningOrientation {
+                                showLanguageSettings = true
+                            }
+                        }) {
+                            VStack {
+                                Image(systemName: "globe")
+                                    .resizable()
+                                    .frame(width: 30, height: 30)
+                                    .foregroundColor(.white)
+                                Text("Language")
                                     .font(.system(size: 12))
                                     .foregroundColor(.white)
                             }
@@ -787,6 +810,10 @@ struct AlarmSetterView: View {
                 }
                 .navigationBarHidden(true)
                 .sheet(isPresented: $showAlarmsView) { AlarmsView() }
+                // NEW: Add sheet for language settings
+                .sheet(isPresented: $showLanguageSettings) {
+                    LanguageSettingsView()
+                }
                 .onAppear {
                     // Initialize spaceships
                     if spaceshipViewModel.availableSpaceships.isEmpty {
@@ -895,7 +922,7 @@ struct AlarmSetterView: View {
     }
 }
 
-// Rest of existing view components remain the same// MARK: - ThrusterView
+// MARK: - ThrusterView
 struct ThrusterView: View {
     @State private var flameAnimation: Double = 0
     
@@ -927,8 +954,6 @@ struct ThrusterView: View {
         }
     }
 }
-
-
 
 // Add these helper functions
 private func getSunIntensity(progress: Double) -> Double {
@@ -964,162 +989,153 @@ struct SnowglobeShape: Shape {
     }
 }
 
+// MARK: - MiniHumanView
+struct MiniHumanView: View {
+    let color: Color
+    @State private var stepAngle: Double = 0
 
-
-
-
-// MARK: - CityEnvironment
-
-
-    // MARK: - MiniHumanView
-    struct MiniHumanView: View {
-        let color: Color
-        @State private var stepAngle: Double = 0
-
-        var body: some View {
-            ZStack {
-                Capsule()
-                    .fill(color)
-                    .frame(width: 5, height: 10)
-                Circle()
-                    .fill(Color(red: 1.0, green: 0.8, blue: 0.6))
-                    .frame(width: 5, height: 5)
-                    .offset(y: -7)
-                Capsule()
-                    .fill(color)
-                    .frame(width: 2, height: 5)
-                    .offset(x: -3, y: -2)
-                    .rotationEffect(.degrees(-stepAngle), anchor: .top)
-                Capsule()
-                    .fill(color)
-                    .frame(width: 2, height: 5)
-                    .offset(x: 3, y: -2)
-                    .rotationEffect(.degrees(stepAngle), anchor: .top)
-                Capsule()
-                    .fill(color)
-                    .frame(width: 2, height: 5)
-                    .offset(x: -1.5, y: 5)
-                    .rotationEffect(.degrees(stepAngle), anchor: .top)
-                Capsule()
-                    .fill(color)
-                    .frame(width: 2, height: 5)
-                    .offset(x: 1.5, y: 5)
-                    .rotationEffect(.degrees(-stepAngle), anchor: .top)
-            }
-            .onAppear {
-                withAnimation(Animation.easeInOut(duration: 0.5).repeatForever(autoreverses: true)) {
-                    stepAngle = 15
-                }
+    var body: some View {
+        ZStack {
+            Capsule()
+                .fill(color)
+                .frame(width: 5, height: 10)
+            Circle()
+                .fill(Color(red: 1.0, green: 0.8, blue: 0.6))
+                .frame(width: 5, height: 5)
+                .offset(y: -7)
+            Capsule()
+                .fill(color)
+                .frame(width: 2, height: 5)
+                .offset(x: -3, y: -2)
+                .rotationEffect(.degrees(-stepAngle), anchor: .top)
+            Capsule()
+                .fill(color)
+                .frame(width: 2, height: 5)
+                .offset(x: 3, y: -2)
+                .rotationEffect(.degrees(stepAngle), anchor: .top)
+            Capsule()
+                .fill(color)
+                .frame(width: 2, height: 5)
+                .offset(x: -1.5, y: 5)
+                .rotationEffect(.degrees(stepAngle), anchor: .top)
+            Capsule()
+                .fill(color)
+                .frame(width: 2, height: 5)
+                .offset(x: 1.5, y: 5)
+                .rotationEffect(.degrees(-stepAngle), anchor: .top)
+        }
+        .onAppear {
+            withAnimation(Animation.easeInOut(duration: 0.5).repeatForever(autoreverses: true)) {
+                stepAngle = 15
             }
         }
     }
+}
 
- 
-    // MARK: - Standard Components
-    struct HumanView: View {
-        @State private var legAngle: Double = 0.0
-        @State private var armAngle: Double = 0.0
-                            
-        var body: some View {
-            ZStack {
-                Capsule().fill(Color.blue).frame(width: 20, height: 40)
-                Circle().fill(Color(red: 1.0, green: 0.8, blue: 0.6)).frame(width: 20, height: 20).offset(y: -30)
-                Circle().fill(Color.black).frame(width: 4, height: 4).offset(x: -5, y: -32)
-                Circle().fill(Color.black).frame(width: 4, height: 4).offset(x: 5, y: -32)
-                Path { path in
-                    path.move(to: CGPoint(x: -3, y: -28))
-                    path.addQuadCurve(to: CGPoint(x: 3, y: -28), control: CGPoint(x: 0, y: -25))
-                }.stroke(Color.black, lineWidth: 1)
-                Capsule().fill(Color.blue).frame(width: 5, height: 20).offset(x: -5, y: 20).rotationEffect(.degrees(legAngle), anchor: .top)
-                Capsule().fill(Color.blue).frame(width: 5, height: 20).offset(x: 5, y: 20).rotationEffect(.degrees(-legAngle), anchor: .top)
-                Capsule().fill(Color.blue).frame(width: 5, height: 15).offset(x: -10, y: -5).rotationEffect(.degrees(armAngle), anchor: .bottom)
-                Capsule().fill(Color.blue).frame(width: 5, height: 15).offset(x: 10, y: -5).rotationEffect(.degrees(-armAngle), anchor: .bottom)
-            }
-            .onAppear {
-                withAnimation(Animation.easeInOut(duration: 0.5).repeatForever(autoreverses: true)) {
-                    legAngle = 20
-                    armAngle = 15
-                }
-            }
-        }
-    }
+// MARK: - Standard Components
+struct HumanView: View {
+    @State private var legAngle: Double = 0.0
+    @State private var armAngle: Double = 0.0
                         
-    struct CarView: View {
-        let color: Color
-        var body: some View {
-            ZStack {
-                RoundedRectangle(cornerRadius: 5)
-                    .fill(color)
-                    .frame(width: 30, height: 15)
-                RoundedRectangle(cornerRadius: 3)
-                    .fill(color.opacity(0.8))
-                    .frame(width: 15, height: 10)
-                    .offset(y: -7)
-                RoundedRectangle(cornerRadius: 2)
-                    .fill(Color.black.opacity(0.7))
-                    .frame(width: 13, height: 8)
-                    .offset(y: -7)
-                Circle()
-                    .fill(Color.black)
-                    .frame(width: 7, height: 7)
-                    .offset(x: -10, y: 5)
-                Circle()
-                    .fill(Color.black)
-                    .frame(width: 7, height: 7)
-                    .offset(x: 10, y: 5)
-                Circle()
-                    .fill(Color.yellow)
-                    .frame(width: 3, height: 3)
-                    .offset(x: 14, y: 0)
-                Circle()
-                    .fill(Color.red)
-                    .frame(width: 3, height: 3)
-                    .offset(x: -14, y: 0)
+    var body: some View {
+        ZStack {
+            Capsule().fill(Color.blue).frame(width: 20, height: 40)
+            Circle().fill(Color(red: 1.0, green: 0.8, blue: 0.6)).frame(width: 20, height: 20).offset(y: -30)
+            Circle().fill(Color.black).frame(width: 4, height: 4).offset(x: -5, y: -32)
+            Circle().fill(Color.black).frame(width: 4, height: 4).offset(x: 5, y: -32)
+            Path { path in
+                path.move(to: CGPoint(x: -3, y: -28))
+                path.addQuadCurve(to: CGPoint(x: 3, y: -28), control: CGPoint(x: 0, y: -25))
+            }.stroke(Color.black, lineWidth: 1)
+            Capsule().fill(Color.blue).frame(width: 5, height: 20).offset(x: -5, y: 20).rotationEffect(.degrees(legAngle), anchor: .top)
+            Capsule().fill(Color.blue).frame(width: 5, height: 20).offset(x: 5, y: 20).rotationEffect(.degrees(-legAngle), anchor: .top)
+            Capsule().fill(Color.blue).frame(width: 5, height: 15).offset(x: -10, y: -5).rotationEffect(.degrees(armAngle), anchor: .bottom)
+            Capsule().fill(Color.blue).frame(width: 5, height: 15).offset(x: 10, y: -5).rotationEffect(.degrees(-armAngle), anchor: .bottom)
+        }
+        .onAppear {
+            withAnimation(Animation.easeInOut(duration: 0.5).repeatForever(autoreverses: true)) {
+                legAngle = 20
+                armAngle = 15
             }
         }
     }
-                        
-    struct TreeView: View {
-        @State private var swayAngle: Double = 0.0
-                        
-        var body: some View {
-            ZStack {
-                // Tree trunk
-                Rectangle()
-                    .fill(LinearGradient(gradient: Gradient(colors: [Color.brown, Color(red: 0.5, green: 0.3, blue: 0.1)]), startPoint: .leading, endPoint: .trailing))
-                    .frame(width: 15, height: 70)
-                    .rotationEffect(.degrees(swayAngle), anchor: .bottom)
-                            
-                // Tree foliage - multiple layers for depth
-                Circle()
-                    .fill(Color.green.opacity(0.8))
-                    .frame(width: 60, height: 60)
-                    .offset(y: -40)
-                    .rotationEffect(.degrees(swayAngle), anchor: .bottom)
-                            
-                Circle()
-                    .fill(Color.green.opacity(0.9))
-                    .frame(width: 50, height: 50)
-                    .offset(x: 15, y: -45)
-                    .rotationEffect(.degrees(swayAngle), anchor: .bottom)
-                            
-                Circle()
-                    .fill(Color.green.opacity(0.7))
-                    .frame(width: 55, height: 55)
-                    .offset(x: -15, y: -45)
-                    .rotationEffect(.degrees(swayAngle), anchor: .bottom)
-                            
-                Circle()
-                    .fill(Color.green.opacity(0.8))
-                    .frame(width: 45, height: 45)
-                    .offset(y: -60)
-                    .rotationEffect(.degrees(swayAngle), anchor: .bottom)
-            }
-            .onAppear {
-                withAnimation(Animation.easeInOut(duration: 2.0).repeatForever(autoreverses: true)) {
-                    swayAngle = 5
-                }
-            }
-        }
-    }
+}
                     
+struct CarView: View {
+    let color: Color
+    var body: some View {
+        ZStack {
+            RoundedRectangle(cornerRadius: 5)
+                .fill(color)
+                .frame(width: 30, height: 15)
+            RoundedRectangle(cornerRadius: 3)
+                .fill(color.opacity(0.8))
+                .frame(width: 15, height: 10)
+                .offset(y: -7)
+            RoundedRectangle(cornerRadius: 2)
+                .fill(Color.black.opacity(0.7))
+                .frame(width: 13, height: 8)
+                .offset(y: -7)
+            Circle()
+                .fill(Color.black)
+                .frame(width: 7, height: 7)
+                .offset(x: -10, y: 5)
+            Circle()
+                .fill(Color.black)
+                .frame(width: 7, height: 7)
+                .offset(x: 10, y: 5)
+            Circle()
+                .fill(Color.yellow)
+                .frame(width: 3, height: 3)
+                .offset(x: 14, y: 0)
+            Circle()
+                .fill(Color.red)
+                .frame(width: 3, height: 3)
+                .offset(x: -14, y: 0)
+        }
+    }
+}
+                    
+struct TreeView: View {
+    @State private var swayAngle: Double = 0.0
+                    
+    var body: some View {
+        ZStack {
+            // Tree trunk
+            Rectangle()
+                .fill(LinearGradient(gradient: Gradient(colors: [Color.brown, Color(red: 0.5, green: 0.3, blue: 0.1)]), startPoint: .leading, endPoint: .trailing))
+                .frame(width: 15, height: 70)
+                .rotationEffect(.degrees(swayAngle), anchor: .bottom)
+                        
+            // Tree foliage - multiple layers for depth
+            Circle()
+                .fill(Color.green.opacity(0.8))
+                .frame(width: 60, height: 60)
+                .offset(y: -40)
+                .rotationEffect(.degrees(swayAngle), anchor: .bottom)
+                        
+            Circle()
+                .fill(Color.green.opacity(0.9))
+                .frame(width: 50, height: 50)
+                .offset(x: 15, y: -45)
+                .rotationEffect(.degrees(swayAngle), anchor: .bottom)
+                        
+            Circle()
+                .fill(Color.green.opacity(0.7))
+                .frame(width: 55, height: 55)
+                .offset(x: -15, y: -45)
+                .rotationEffect(.degrees(swayAngle), anchor: .bottom)
+                        
+            Circle()
+                .fill(Color.green.opacity(0.8))
+                .frame(width: 45, height: 45)
+                .offset(y: -60)
+                .rotationEffect(.degrees(swayAngle), anchor: .bottom)
+        }
+        .onAppear {
+            withAnimation(Animation.easeInOut(duration: 2.0).repeatForever(autoreverses: true)) {
+                swayAngle = 5
+            }
+        }
+    }
+}

@@ -48,7 +48,7 @@ struct AlarmsView: View {
     // Header with title
     private var headerView: some View {
         HStack {
-            Text("Alarms")
+            Text("alarms".localized)
                 .font(.system(size: 38, weight: .bold, design: .rounded))
                 .foregroundColor(.white)
                 .padding(.leading)
@@ -454,7 +454,7 @@ struct AlarmsView: View {
         @EnvironmentObject var viewModel: AlarmViewModel
         let alarm: Alarm
         @State private var isOn: Bool = false
-        @State private var isExpanded: Bool = false
+        @State private var isExpanded: Bool = true
         
         var body: some View {
             VStack(alignment: .leading, spacing: 0) {
@@ -480,10 +480,7 @@ struct AlarmsView: View {
                                         .font(.system(size: 18, weight: .semibold, design: .rounded))
                                         .foregroundColor(.white)
                                     
-                                    Text(alarm.description)
-                                        .font(.system(size: 14, design: .rounded))
-                                        .foregroundColor(.gray)
-                                        .lineLimit(1)
+    	
                                 }
                             }
                             

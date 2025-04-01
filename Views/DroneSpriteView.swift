@@ -4,7 +4,7 @@ import SpriteKit
 struct DroneSpriteView: UIViewRepresentable {
     var droneObject: DroneAdObject
     var isMovingRight: Bool
-    var onTap: () -> Void
+    var onTap: (DroneScene?) -> Void // Updated to pass DroneScene
     
     func makeUIView(context: Context) -> SKView {
         let view = SKView()
@@ -47,16 +47,19 @@ struct DroneSpriteView: UIViewRepresentable {
         }
         
         @objc func handleTap(_ sender: UITapGestureRecognizer) {
-            // Call the existing onTap closure
-            parent.onTap()
+            guard let view = sender.view as? SKView,
+                  let scene = view.scene as? DroneScene else {
+                parent.onTap(nil) // Pass nil if scene isn’t available
+                return
+            }
             
-            // Trigger confetti if the tap hits the drone
-            if let view = sender.view as? SKView, let scene = view.scene as? DroneScene {
-                let location = sender.location(in: view)
-                let sceneLocation = scene.convertPoint(fromView: location)
-                if let droneNode = scene.droneNode, droneNode.contains(sceneLocation) {
-                    scene.triggerConfetti(at: droneNode.position)
-                }
+            let location = sender.location(in: view)
+            let sceneLocation = scene.convertPoint(fromView: location)
+            
+            // Check if tap hits drone or ad label
+            if (scene.droneNode?.contains(sceneLocation) ?? false) ||
+               (scene.adLabelNode?.contains(sceneLocation) ?? false) {
+                parent.onTap(scene) // Pass scene to onTap
             }
         }
     }

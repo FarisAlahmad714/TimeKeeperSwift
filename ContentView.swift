@@ -4,6 +4,10 @@ struct ContentView: View {
     @State private var selectedTab = 0
     @EnvironmentObject var alarmViewModel: AlarmViewModel
     @Environment(\.horizontalSizeClass) var horizontalSizeClass
+    @State private var refreshTrigger = UUID()
+
+    // Add state for tracking current language
+    @State private var currentLanguage: String = LanguageManager.shared.currentLanguage
     
     // Compute if we're in landscape mode
     private var isLandscape: Bool {
@@ -18,7 +22,7 @@ struct ContentView: View {
                     .tabItem {
                         // Custom tab item with orientation-aware sizing
                         Label {
-                            Text("Alarms")
+                            Text("alarms".localized)
                         } icon: {
                             Image("alarm_icon")
                                 .renderingMode(.original)
@@ -32,7 +36,7 @@ struct ContentView: View {
                 WorldClockView()
                     .tabItem {
                         Label {
-                            Text("World Clock")
+                            Text("world_clock".localized)
                         } icon: {
                             Image("worldclock_icon")
                                 .renderingMode(.original)
@@ -46,7 +50,7 @@ struct ContentView: View {
                 CombinedTimeView()
                     .tabItem {
                         Label {
-                            Text("TimeKeeper")
+                            Text("timekeeper".localized)
                         } icon: {
                             Image("stopwatch_icon")
                                 .renderingMode(.original)
@@ -75,6 +79,16 @@ struct ContentView: View {
                 }
             }
         }
+        // Add language change notification handler
+        .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("LanguageChanged"))) { _ in
+            // Update current language
+            currentLanguage = LanguageManager.shared.currentLanguage
+            // Force view refresh
+            refreshTrigger = UUID()
+
+        }
+        // Add support for right-to-left languages
+        .environment(\.layoutDirection, currentLanguage == "ar" ? .rightToLeft : .leftToRight)
     }
     
     // Size for tab icons based on orientation
@@ -167,7 +181,7 @@ struct AlarmActiveView: View {
                         VStack {
                             Image(systemName: "bed.double.fill")
                                 .font(.system(size: 30))
-                            Text("Snooze")
+                            Text("snooze".localized)
                                 .font(.headline)
                         }
                         .frame(width: 120, height: 80)
@@ -180,7 +194,7 @@ struct AlarmActiveView: View {
                         VStack {
                             Image(systemName: "stop.fill")
                                 .font(.system(size: 30))
-                            Text("Dismiss")
+                            Text("dismiss".localized)
                                 .font(.headline)
                         }
                         .frame(width: 120, height: 80)

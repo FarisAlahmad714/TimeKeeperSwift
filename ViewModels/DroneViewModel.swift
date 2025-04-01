@@ -68,6 +68,7 @@ class DroneViewModel: ObservableObject {
     }
     
     // In DroneViewModel.swift, modify initializeDefaultDrones():
+    // In DroneViewModel.swift
     public func initializeDefaultDrones() {
         // Clear existing saved drones first
         UserDefaults.standard.removeObject(forKey: "drones")
@@ -75,17 +76,17 @@ class DroneViewModel: ObservableObject {
         // Start fresh with templates
         availableDrones = DroneAdObject.templates
         
-        // Update ALL drones to ensure none have "TimeKeeper Premium"
+        // Update ALL drones with localized banner text
         for i in 0..<availableDrones.count {
             var drone = availableDrones[i]
-            drone.bannerText = "YOUR AD HERE!" // Replace with desired text
+            drone.bannerText = "ad_banner".localized // Use localized string
             availableDrones[i] = drone
         }
         
-        // Then update the first one with ad content as before
+        // Update the first drone with ad content
         if var demoDrone = availableDrones.first {
             demoDrone.adContent = AdContent(
-                advertiserName: "YOUR AD HERE!", // Match the banner text
+                advertiserName: "ad_banner".localized, // Match banner text
                 bannerImage: nil,
                 targetURL: URL(string: "https://timekeeper.app/premium"),
                 displayDuration: 15.0,
@@ -175,7 +176,8 @@ class DroneViewModel: ObservableObject {
     
     // MARK: - Ad Handling
     
-    func handleAdTap() {
+    // In DroneSpriteView.swift, inside DroneViewModel
+    func handleAdTap(scene: DroneScene?) {
         guard let drone = activeDrone, let adContent = drone.adContent, adContent.isActive else {
             return
         }
@@ -197,7 +199,14 @@ class DroneViewModel: ObservableObject {
             "timestamp": Date().timeIntervalSince1970
         ])
         
-        if let url = adContent.targetURL {
+        // Trigger confetti and wait for completion
+        if let scene = scene, let url = adContent.targetURL {
+            scene.triggerConfetti(at: drone.position) {
+                // This runs after confetti animation completes
+                UIApplication.shared.open(url)
+            }
+        } else if let url = adContent.targetURL {
+            // Fallback if scene isn’t available
             UIApplication.shared.open(url)
         }
     }

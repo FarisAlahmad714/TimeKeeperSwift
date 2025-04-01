@@ -116,7 +116,7 @@ extension DroneAdObject {
             droneType: .quadcopter,
             position: CGPoint(x: 100, y: 150),
             speed: 1.0,
-            bannerText: "YOUR AD HERE!",
+            bannerText: "ad_banner".localized, // Localized
             bannerWidth: 150,
             propellerSpeed: 15.0,
             hoverAmplitude: 3.0
@@ -126,7 +126,7 @@ extension DroneAdObject {
             droneType: .deliveryDrone,
             position: CGPoint(x: 100, y: 180),
             speed: 0.8,
-            bannerText: "Try our new features!",
+            bannerText: "ad_banner".localized, // Localized
             bannerWidth: 200,
             propellerSpeed: 12.0,
             hoverAmplitude: 4.0
@@ -136,7 +136,7 @@ extension DroneAdObject {
             droneType: .racingDrone,
             position: CGPoint(x: 100, y: 120),
             speed: 2.0,
-            bannerText: "Ultra fast performance",
+            bannerText: "ad_banner".localized, // Localized
             bannerWidth: 120,
             propellerSpeed: 25.0,
             hoverAmplitude: 2.0
@@ -146,7 +146,7 @@ extension DroneAdObject {
             droneType: .hexacopter,
             position: CGPoint(x: 100, y: 200),
             speed: 0.5,
-            bannerText: "Wide view surveillance",
+            bannerText: "ad_banner".localized, // Localized
             bannerWidth: 180,
             propellerSpeed: 10.0,
             hoverAmplitude: 5.0

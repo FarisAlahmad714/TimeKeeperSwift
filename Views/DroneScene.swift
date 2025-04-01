@@ -13,8 +13,8 @@ class DroneScene: SKScene, SKPhysicsContactDelegate {
     private var bannerNode: SKNode?
     private var bannerPhysicsBody: SKPhysicsBody?
     private var bannerTextNode: SKLabelNode?
-    private var adLabelNode: SKNode?
-    
+    public var adLabelNode: SKNode? // Changed from private to public
+
     // Animation control
     private var lastUpdateTime: TimeInterval = 0
     private var hoverPhase: CGFloat = 0
@@ -41,6 +41,14 @@ class DroneScene: SKScene, SKPhysicsContactDelegate {
         
         setupDrone()
         setupConfettiEmitter()
+        
+        // Add observer for language changes
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(updateBannerText),
+            name: NSNotification.Name("LanguageChanged"),
+            object: nil
+        )
     }
     
     private func setupConfettiEmitter() {
@@ -96,7 +104,6 @@ class DroneScene: SKScene, SKPhysicsContactDelegate {
             addChild(emitter)
         }
     }
-
     
     // Method to create a programmatic texture for confetti particles
     private func createConfettiTexture() -> SKTexture {
@@ -136,25 +143,26 @@ class DroneScene: SKScene, SKPhysicsContactDelegate {
         return SKTexture(image: image)
     }
     
-    // And modify the triggering function for longer display:
-    func triggerConfetti(at position: CGPoint) {
-        guard let emitter = confettiEmitter else { return }
+    func triggerConfetti(at position: CGPoint, completion: @escaping () -> Void) {
+        guard let emitter = confettiEmitter else {
+            completion() // Call completion immediately if no emitter
+            return
+        }
         
         emitter.position = position
         emitter.isHidden = false
         emitter.particleBirthRate = 300 // More intense burst
         
         // Reset after a longer burst
-        let wait = SKAction.wait(forDuration: 1.0) // Longer emission time (was 0.5)
+        let wait = SKAction.wait(forDuration: 1.0) // Emission time
         let stop = SKAction.run {
             emitter.particleBirthRate = 0
-            // Don't hide immediately - let particles fade out naturally
-            
-            // Hide after all particles are gone
-            let finalWait = SKAction.wait(forDuration: 4.0) // Wait for particles to clear
+            // Wait for particles to clear before completing
+            let finalWait = SKAction.wait(forDuration: 4.0) // Fade-out time
             let finalHide = SKAction.run {
                 emitter.isHidden = true
                 emitter.resetSimulation() // Reset for next use
+                completion() // Call completion when animation is fully done
             }
             emitter.run(SKAction.sequence([finalWait, finalHide]))
         }
@@ -478,6 +486,20 @@ class DroneScene: SKScene, SKPhysicsContactDelegate {
         
         animatePropellers()
         updateAdLabel()
+    }
+    
+    // MARK: - Language Update
+    @objc private func updateBannerText() {
+        if let adLabelNode = adLabelNode,
+           let textNode = adLabelNode.childNode(withName: "text") as? SKLabelNode {
+            textNode.text = "ad_banner".localized
+            print("Updated banner text to: \(textNode.text ?? "nil")")
+        }
+    }
+    
+    deinit {
+        // Clean up observer
+        NotificationCenter.default.removeObserver(self, name: NSNotification.Name("LanguageChanged"), object: nil)
     }
 }
 

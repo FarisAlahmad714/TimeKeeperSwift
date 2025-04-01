@@ -20,11 +20,11 @@ struct DroneAdView: View {
                     DroneSpriteView(
                         droneObject: activeDrone,
                         isMovingRight: viewModel.isMovingRight,
-                        onTap: {
+                        onTap: { scene in // Modified to pass DroneScene
                             if !isTransitioningOrientation {
                                 viewModel.logInteraction()
                                 if activeDrone.adContent != nil {
-                                    viewModel.handleAdTap()
+                                    viewModel.handleAdTap(scene: scene) // Pass scene to handleAdTap
                                 }
                             }
                         }
@@ -85,8 +85,8 @@ struct DroneAdView: View {
             .onDisappear {
                 // Remove the observer when view disappears
                 NotificationCenter.default.removeObserver(
-                    self, 
-                    name: UIDevice.orientationDidChangeNotification, 
+                    self,
+                    name: UIDevice.orientationDidChangeNotification,
                     object: nil
                 )
                 viewModel.stopFlying()
