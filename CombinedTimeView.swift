@@ -1,12 +1,5 @@
-//
-//  CombinedTimeView.swift
-//  TimeKeeper
-//
-//  Created by Faris Alahmad on 3/11/25.
-//
-//
 import SwiftUI
-import FirebaseAnalytics // Add Firebase import
+import FirebaseAnalytics
 
 struct CombinedTimeView: View {
     @EnvironmentObject var stopwatchViewModel: StopwatchViewModel
@@ -21,28 +14,40 @@ struct CombinedTimeView: View {
     var body: some View {
         NavigationView {
             ZStack {
+                // Dark theme background
                 Color.black.edgesIgnoringSafeArea(.all)
                 
-                VStack(spacing: 10) {
+                VStack(spacing: 20) {
+                    // Modernized title
                     Text(selectedMode == .stopwatch ? "Stopwatch" : "Timer")
-                        .font(.system(size: 34, weight: .bold))
+                        .font(.system(size: 34, weight: .bold, design: .rounded))
                         .foregroundColor(.white)
                         .padding(.top, 20)
                     
+                    // Redesigned picker
                     Picker("Mode", selection: $selectedMode) {
                         Text("Timer").tag(TimeMode.timer)
                         Text("Stopwatch").tag(TimeMode.stopwatch)
                     }
                     .pickerStyle(SegmentedPickerStyle())
                     .padding(.horizontal)
+                    .background(
+                        LinearGradient(
+                            gradient: Gradient(colors: [Color(red: 0.15, green: 0.15, blue: 0.2), Color(red: 0.1, green: 0.1, blue: 0.15)]),
+                            startPoint: .leading,
+                            endPoint: .trailing
+                        )
+                        .cornerRadius(10)
+                    )
+                    .foregroundColor(.white)
                     .onChange(of: selectedMode) { oldValue, newValue in
-                        // Analytics: Track mode switch
                         Analytics.logEvent("CombinedTime_mode_switched", parameters: [
                             "new_mode": newValue == .timer ? "timer" : "stopwatch",
                             "old_mode": oldValue == .timer ? "timer" : "stopwatch"
                         ])
                     }
                     
+                    // Content based on mode
                     if selectedMode == .timer {
                         TimerContent()
                     } else {
@@ -54,31 +59,22 @@ struct CombinedTimeView: View {
             }
             .navigationBarHidden(true)
             .onAppear {
-                // Analytics: Track screen view for CombinedTimeView
                 Analytics.logEvent(AnalyticsEventScreenView, parameters: [
                     AnalyticsParameterScreenName: "Combined Time",
                     AnalyticsParameterScreenClass: "CombinedTimeView"
                 ])
             }
         }
+        .preferredColorScheme(.dark)
     }
 }
 
-struct CombinedTimeView_Previews: PreviewProvider {
-    static var previews: some View {
-        CombinedTimeView()
-            .environmentObject(StopwatchViewModel())
-            .environmentObject(TimerViewModel())
-            .preferredColorScheme(.dark)
-    }
-}
-
-// Stopwatch Content (Unchanged functionality, added analytics)
 struct StopwatchContent: View {
     @EnvironmentObject var viewModel: StopwatchViewModel
     
     var body: some View {
         VStack(spacing: 20) {
+            // Original stopwatch circle (unchanged)
             ZStack {
                 RadialGradient(
                     gradient: Gradient(colors: [Color.purple.opacity(0.8), Color.blue.opacity(0.3)]),
@@ -154,33 +150,44 @@ struct StopwatchContent: View {
             }
             .padding()
             
+            // Redesigned time display
             Text(viewModel.formattedTime)
-                .font(.system(size: 40, weight: .bold, design: .monospaced))
+                .font(.system(size: 40, weight: .bold, design: .rounded))
                 .foregroundColor(.white)
+                .padding(.vertical, 6)
+                .padding(.horizontal, 10)
+                .background(
+                    RoundedRectangle(cornerRadius: 10)
+                        .fill(Color.black.opacity(0.5))
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 10)
+                                .stroke(Color.white.opacity(0.1), lineWidth: 1)
+                        )
+                )
             
+            // Redesigned buttons
             HStack(spacing: 20) {
                 Button(action: {
                     viewModel.startOrPause()
-                    // Analytics: Track starting or pausing the stopwatch
                     Analytics.logEvent("CombinedTime_stopwatch_start_pause_tapped", parameters: [
                         "action": viewModel.isRunning ? "pause" : "start",
                         "current_time": viewModel.formattedTime
                     ])
                 }) {
                     Text(viewModel.isRunning ? "Pause" : "Start")
-                        .font(.headline)
+                        .font(.system(size: 18, weight: .semibold, design: .rounded))
                         .foregroundColor(.white)
-                        .padding()
+                        .padding(.vertical, 15)
                         .frame(maxWidth: .infinity)
                         .background(
                             LinearGradient(
-                                gradient: Gradient(colors: viewModel.isRunning ? [Color.yellow, Color.orange] : [Color.green, Color.cyan]),
+                                gradient: Gradient(colors: [Color(red: 0.9, green: 0.2, blue: 0.3), Color(red: 1.0, green: 0.4, blue: 0.1)]),
                                 startPoint: .leading,
                                 endPoint: .trailing
                             )
                         )
-                        .cornerRadius(50)
-                        .shadow(color: (viewModel.isRunning ? Color.yellow : Color.green).opacity(0.3), radius: 5, x: 0, y: 3)
+                        .cornerRadius(30)
+                        .shadow(color: Color(red: 0.9, green: 0.2, blue: 0.3).opacity(0.3), radius: 5, x: 0, y: 3)
                 }
                 
                 Button(action: {
@@ -189,7 +196,6 @@ struct StopwatchContent: View {
                         viewModel.addLap()
                         let lapCountAfter = viewModel.laps.count
                         if lapCountAfter > lapCountBefore {
-                            // Analytics: Track adding a lap
                             if let lastLap = viewModel.laps.last {
                                 Analytics.logEvent("CombinedTime_stopwatch_lap_added", parameters: [
                                     "lap_id": lastLap.id,
@@ -200,36 +206,36 @@ struct StopwatchContent: View {
                         }
                     } else {
                         viewModel.reset()
-                        // Analytics: Track resetting the stopwatch
                         Analytics.logEvent("CombinedTime_stopwatch_reset_tapped", parameters: [
                             "total_laps": viewModel.laps.count
                         ])
                     }
                 }) {
                     Text(viewModel.isRunning ? "Lap" : "Reset")
-                        .font(.headline)
+                        .font(.system(size: 18, weight: .semibold, design: .rounded))
                         .foregroundColor(.white)
-                        .padding()
+                        .padding(.vertical, 15)
                         .frame(maxWidth: .infinity)
                         .background(
                             LinearGradient(
-                                gradient: Gradient(colors: [Color.red, Color.orange]),
+                                gradient: Gradient(colors: [Color(red: 0.9, green: 0.2, blue: 0.3), Color(red: 1.0, green: 0.4, blue: 0.1)]),
                                 startPoint: .leading,
                                 endPoint: .trailing
                             )
                         )
-                        .cornerRadius(50)
-                        .shadow(color: Color.red.opacity(0.3), radius: 5, x: 0, y: 3)
+                        .cornerRadius(30)
+                        .shadow(color: Color(red: 0.9, green: 0.2, blue: 0.3).opacity(0.3), radius: 5, x: 0, y: 3)
                 }
                 .disabled(!viewModel.isRunning && viewModel.formattedTime == "00:00:00.00")
                 .opacity(!viewModel.isRunning && viewModel.formattedTime == "00:00:00.00" ? 0.5 : 1.0)
             }
             .padding(.horizontal)
             
+            // Redesigned lap list
             if viewModel.laps.isEmpty {
                 Text("No laps recorded")
-                    .font(.subheadline)
-                    .foregroundColor(.gray)
+                    .font(.system(size: 16, design: .rounded))
+                    .foregroundColor(.white.opacity(0.6))
                     .padding(.top, 20)
             } else {
                 ScrollView {
@@ -237,19 +243,19 @@ struct StopwatchContent: View {
                         ForEach(viewModel.laps) { lap in
                             HStack {
                                 Text("Lap \(lap.id)")
-                                    .font(.headline)
+                                    .font(.system(size: 18, weight: .semibold, design: .rounded))
                                     .foregroundColor(.white)
                                 Spacer()
                                 Text(lap.time)
-                                    .font(.subheadline)
+                                    .font(.system(size: 14, design: .rounded))
                                     .foregroundColor(.gray)
                             }
                             .padding()
-                            .background(Color.gray.opacity(0.2))
-                            .cornerRadius(10)
+                            .background(Color(red: 0.15, green: 0.15, blue: 0.2))
+                            .cornerRadius(15)
                             .overlay(
-                                RoundedRectangle(cornerRadius: 10)
-                                    .stroke(Color.gray.opacity(0.5), lineWidth: 1)
+                                RoundedRectangle(cornerRadius: 15)
+                                    .stroke(Color.white.opacity(0.1), lineWidth: 1)
                             )
                         }
                     }
@@ -261,7 +267,6 @@ struct StopwatchContent: View {
     }
 }
 
-// Timer Content (Fixed Hourglass Overlap, added analytics)
 struct TimerContent: View {
     @EnvironmentObject var viewModel: TimerViewModel
     @State private var sandProgress: CGFloat = 1.0
@@ -269,15 +274,13 @@ struct TimerContent: View {
     @State private var rotationDegrees: Double = 0
     
     var body: some View {
-        VStack(spacing: 30) {
-            // Dedicated Hourglass Section at the Top with fixed height
+        VStack(spacing: 20) {
+            // Original hourglass (unchanged)
             VStack {
                 ZStack {
-                    ZStack {
-                        HourglassView(sandProgress: sandProgress, isFlipped: isFlipped)
-                            .frame(width: 140, height: 210)
-                    }
-                    .rotationEffect(.degrees(rotationDegrees))
+                    HourglassView(sandProgress: sandProgress, isFlipped: isFlipped)
+                        .frame(width: 140, height: 210)
+                        .rotationEffect(.degrees(rotationDegrees))
                     
                     Text(viewModel.formattedTime(viewModel.isRunning ? viewModel.remainingTime : TimeInterval(viewModel.hours * 3600 + viewModel.minutes * 60 + viewModel.seconds)))
                         .font(.system(size: 36, weight: .bold, design: .monospaced))
@@ -310,31 +313,30 @@ struct TimerContent: View {
                 }
             }
             
-            // Scrollable content area for everything else
+            // Redesigned scrollable content
             ScrollView {
-                VStack(spacing: 30) {
-                    // Timer History Section
+                VStack(spacing: 20) {
+                    // Timer history
                     if !viewModel.timerHistory.isEmpty {
                         VStack(alignment: .leading, spacing: 15) {
                             Text("History")
-                                .font(.title3)
+                                .font(.system(size: 18, weight: .semibold, design: .rounded))
                                 .foregroundColor(.white)
                                 .padding(.top, 10)
                             
                             ForEach(viewModel.timerHistory) { item in
                                 HStack {
                                     Text(item.label)
-                                        .font(.subheadline)
+                                        .font(.system(size: 18, weight: .semibold, design: .rounded))
                                         .foregroundColor(.white)
                                     Spacer()
                                     Text(item.title)
-                                        .font(.subheadline)
+                                        .font(.system(size: 14, design: .rounded))
                                         .foregroundColor(.gray)
                                     Button(action: {
                                         if let index = viewModel.timerHistory.firstIndex(where: { $0.id == item.id }) {
                                             viewModel.timerHistory.remove(at: index)
                                             viewModel.saveHistory()
-                                            // Analytics: Track deleting a timer history item
                                             Analytics.logEvent("CombinedTime_timer_history_deleted", parameters: [
                                                 "history_id": item.id,
                                                 "label": item.label,
@@ -342,45 +344,48 @@ struct TimerContent: View {
                                             ])
                                         }
                                     }) {
-                                        Image(systemName: "trash")
-                                            .foregroundColor(.red)
-                                            .padding(.leading, 8)
+                                        Image(systemName: "trash.fill")
+                                            .foregroundColor(Color(red: 0.9, green: 0.2, blue: 0.3))
+                                            .padding(10)
+                                            .background(Color(red: 0.9, green: 0.2, blue: 0.3).opacity(0.1))
+                                            .clipShape(Circle())
                                     }
                                 }
                                 .padding()
-                                .background(Color.gray.opacity(0.2))
-                                .cornerRadius(10)
+                                .background(Color(red: 0.15, green: 0.15, blue: 0.2))
+                                .cornerRadius(15)
                                 .overlay(
-                                    RoundedRectangle(cornerRadius: 10)
-                                        .stroke(Color.gray.opacity(0.5), lineWidth: 1)
+                                    RoundedRectangle(cornerRadius: 15)
+                                        .stroke(Color.white.opacity(0.1), lineWidth: 1)
                                 )
                             }
                         }
                         .padding(.horizontal, 20)
                     }
                     
-                    // Input Controls Section (Label and Pickers)
+                    // Input controls
                     if !viewModel.isRunning {
-                        VStack(spacing: 25) {
+                        VStack(spacing: 15) {
                             TextField("Label", text: $viewModel.label)
+                                .font(.system(size: 16, design: .rounded))
                                 .foregroundColor(.white)
                                 .padding()
-                                .background(Color.gray.opacity(0.2))
-                                .cornerRadius(10)
+                                .background(Color(red: 0.2, green: 0.2, blue: 0.25))
+                                .cornerRadius(15)
                                 .overlay(
-                                    RoundedRectangle(cornerRadius: 10)
-                                        .stroke(Color.gray.opacity(0.5), lineWidth: 1)
+                                    RoundedRectangle(cornerRadius: 15)
+                                        .stroke(Color.white.opacity(0.1), lineWidth: 1)
                                 )
                             
-                            HStack(spacing: 15) {
+                            HStack(spacing: 10) {
                                 Picker("Hours", selection: $viewModel.hours) {
                                     ForEach(0..<24) { Text("\($0)").tag($0) }
                                 }
                                 .pickerStyle(.wheel)
                                 .frame(width: 100)
                                 .clipped()
-                                .background(Color.gray.opacity(0.2))
-                                .cornerRadius(10)
+                                .background(Color(red: 0.2, green: 0.2, blue: 0.25))
+                                .cornerRadius(15)
                                 
                                 Picker("Minutes", selection: $viewModel.minutes) {
                                     ForEach(0..<60) { Text("\($0)").tag($0) }
@@ -388,8 +393,8 @@ struct TimerContent: View {
                                 .pickerStyle(.wheel)
                                 .frame(width: 100)
                                 .clipped()
-                                .background(Color.gray.opacity(0.2))
-                                .cornerRadius(10)
+                                .background(Color(red: 0.2, green: 0.2, blue: 0.25))
+                                .cornerRadius(15)
                                 
                                 Picker("Seconds", selection: $viewModel.seconds) {
                                     ForEach(0..<60) { Text("\($0)").tag($0) }
@@ -397,8 +402,8 @@ struct TimerContent: View {
                                 .pickerStyle(.wheel)
                                 .frame(width: 100)
                                 .clipped()
-                                .background(Color.gray.opacity(0.2))
-                                .cornerRadius(10)
+                                .background(Color(red: 0.2, green: 0.2, blue: 0.25))
+                                .cornerRadius(15)
                             }
                         }
                         .padding(.horizontal, 20)
@@ -406,19 +411,17 @@ struct TimerContent: View {
                 }
             }
             
-            // Buttons Section
-            HStack(spacing: 30) {
+            // Redesigned buttons
+            HStack(spacing: 20) {
                 Button(action: {
                     if viewModel.isRunning {
                         viewModel.stopTimer()
-                        // Analytics: Track stopping the timer
                         Analytics.logEvent("CombinedTime_timer_stop_tapped", parameters: [
                             "label": viewModel.label,
                             "remaining_time": viewModel.remainingTime
                         ])
                     } else {
                         viewModel.startTimer()
-                        // Analytics: Track starting the timer
                         let totalDuration = TimeInterval(viewModel.hours * 3600 + viewModel.minutes * 60 + viewModel.seconds)
                         Analytics.logEvent("CombinedTime_timer_start_tapped", parameters: [
                             "label": viewModel.label,
@@ -427,19 +430,19 @@ struct TimerContent: View {
                     }
                 }) {
                     Text(viewModel.isRunning ? "Stop" : "Start")
-                        .font(.headline)
+                        .font(.system(size: 18, weight: .semibold, design: .rounded))
                         .foregroundColor(.white)
                         .padding(.vertical, 15)
                         .frame(maxWidth: .infinity)
                         .background(
                             LinearGradient(
-                                gradient: Gradient(colors: viewModel.isRunning ? [Color.red, Color.orange] : [Color.green, Color.cyan]),
+                                gradient: Gradient(colors: [Color(red: 0.9, green: 0.2, blue: 0.3), Color(red: 1.0, green: 0.4, blue: 0.1)]),
                                 startPoint: .leading,
                                 endPoint: .trailing
                             )
                         )
-                        .cornerRadius(50)
-                        .shadow(color: (viewModel.isRunning ? Color.red : Color.green).opacity(0.3), radius: 5, x: 0, y: 3)
+                        .cornerRadius(30)
+                        .shadow(color: Color(red: 0.9, green: 0.2, blue: 0.3).opacity(0.3), radius: 5, x: 0, y: 3)
                 }
                 .disabled(!viewModel.isRunning && viewModel.hours == 0 && viewModel.minutes == 0 && viewModel.seconds == 0)
                 .opacity(!viewModel.isRunning && viewModel.hours == 0 && viewModel.minutes == 0 && viewModel.seconds == 0 ? 0.5 : 1.0)
@@ -447,25 +450,24 @@ struct TimerContent: View {
                 Button(action: {
                     viewModel.resetTimer()
                     resetHourglass()
-                    // Analytics: Track resetting the timer
                     Analytics.logEvent("CombinedTime_timer_reset_tapped", parameters: [
                         "label": viewModel.label
                     ])
                 }) {
                     Text("Reset")
-                        .font(.headline)
+                        .font(.system(size: 18, weight: .semibold, design: .rounded))
                         .foregroundColor(.white)
                         .padding(.vertical, 15)
                         .frame(maxWidth: .infinity)
                         .background(
                             LinearGradient(
-                                gradient: Gradient(colors: [Color.red, Color.orange]),
+                                gradient: Gradient(colors: [Color(red: 0.9, green: 0.2, blue: 0.3), Color(red: 1.0, green: 0.4, blue: 0.1)]),
                                 startPoint: .leading,
                                 endPoint: .trailing
                             )
                         )
-                        .cornerRadius(50)
-                        .shadow(color: Color.red.opacity(0.3), radius: 5, x: 0, y: 3)
+                        .cornerRadius(30)
+                        .shadow(color: Color(red: 0.9, green: 0.2, blue: 0.3).opacity(0.3), radius: 5, x: 0, y: 3)
                 }
                 .disabled(viewModel.isRunning || (viewModel.hours == 0 && viewModel.minutes == 0 && viewModel.seconds == 0))
                 .opacity(viewModel.isRunning || (viewModel.hours == 0 && viewModel.minutes == 0 && viewModel.seconds == 0) ? 0.5 : 1.0)
@@ -497,7 +499,7 @@ struct TimerContent: View {
     }
 }
 
-// Hourglass View with Fixed Scope Error (Unchanged functionality)
+// Original HourglassView (unchanged)
 struct HourglassView: View {
     let sandProgress: CGFloat
     let isFlipped: Bool
@@ -577,7 +579,7 @@ struct HourglassView: View {
         let middle = height / 2
         if fillRatio <= 0 { return }
         
-        let topBottomWidth = width * 0.7 // Define topBottomWidth locally to match createHourglassPath
+        let topBottomWidth = width * 0.7
         let neckWidth = width * 0.03
         let maxSandHeight = middle
         let sandHeight = maxSandHeight * fillRatio
@@ -642,6 +644,7 @@ struct HourglassView: View {
                 control1: CGPoint(x: (width - bottomWidth) / 2 + bottomWidth * 0.1, y: height * 0.8),
                 control2: CGPoint(x: width / 2 - neckWidth * 2, y: middle * 1.2)
             )
+            fullPath.closeSubpath()
             
             let sandGradient = Gradient(colors: [
                 Color(red: 0.98, green: 0.9, blue: 0.4),
@@ -691,6 +694,7 @@ struct HourglassView: View {
             control1: CGPoint(x: width / 2 - rightWidthAtBottom / 2 + rightWidthAtBottom * 0.2, y: sandBottomY - sandHeight * 0.1),
             control2: CGPoint(x: width / 2 - neckWidth * 1.5, y: middle + sandHeight * 0.3)
         )
+        sandPath.closeSubpath()
         
         let sandGradient = Gradient(colors: [
             Color(red: 0.98, green: 0.9, blue: 0.5),
@@ -811,5 +815,14 @@ struct HourglassView: View {
         )
         path.closeSubpath()
         return path
+    }
+}
+
+struct CombinedTimeView_Previews: PreviewProvider {
+    static var previews: some View {
+        CombinedTimeView()
+            .environmentObject(StopwatchViewModel())
+            .environmentObject(TimerViewModel())
+            .preferredColorScheme(.dark)
     }
 }

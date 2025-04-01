@@ -203,6 +203,44 @@ class AudioPlayerService: NSObject {
             print("Background task ended")
         }
     }
+    // Add these new methods to your AudioPlayerService class:
+
+    // Method to play a simple sound for preview
+    func playSound(fileName: String) {
+        // Stop any existing preview
+        stopSound()
+        
+        // Get the sound file URL
+        guard let url = Bundle.main.url(forResource: fileName.replacingOccurrences(of: ".mp3", with: ""), withExtension: "mp3") else {
+            print("Sound file not found: \(fileName)")
+            return
+        }
+        
+        do {
+            // Ensure audio session is active
+            try AVAudioSession.sharedInstance().setActive(true, options: .notifyOthersOnDeactivation)
+            
+            // Initialize player
+            audioPlayer = try AVAudioPlayer(contentsOf: url)
+            audioPlayer?.delegate = self
+            audioPlayer?.volume = 0.8
+            audioPlayer?.prepareToPlay()
+            let success = audioPlayer?.play() ?? false
+            
+            print("Started preview sound playback: \(success)")
+        } catch {
+            print("Failed to play preview sound: \(error)")
+        }
+    }
+
+    // Method to stop a preview sound
+    func stopSound() {
+        if audioPlayer?.isPlaying == true {
+            audioPlayer?.stop()
+            audioPlayer = nil
+            print("Stopped preview sound")
+        }
+    }
     
     private func startVibration() {
         // Stop any existing vibration timer
